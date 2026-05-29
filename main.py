@@ -13,6 +13,7 @@ from backend_schemas import (
     FolderStructure,
 )
 from backend_planning_agent import plan_backend
+from master_orchestrator import orchestrate_full_architecture
 import logging
 
 # Configure logging
@@ -211,6 +212,22 @@ async def plan_frontend(request: BackendPlanRequest):
             status_code=500, 
             detail=f"Frontend planning failed: {str(e)}"
         )
+
+
+@app.post("/plan-full-architecture")
+async def plan_full_architecture_endpoint(request: dict) -> dict:
+    """Run backend and frontend planning in parallel from a validation payload."""
+
+    validation_output = request.get("validation_output")
+    if not isinstance(validation_output, dict):
+        raise HTTPException(status_code=400, detail="Missing validation_output")
+
+    logger.info(
+        "Starting full architecture planning for %s",
+        validation_output.get("project_type", "unknown"),
+    )
+
+    return await orchestrate_full_architecture(validation_output)
 
 
 @app.get("/info")
