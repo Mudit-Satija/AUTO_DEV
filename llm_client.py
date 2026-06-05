@@ -6,17 +6,19 @@ load_dotenv()
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "180"))
 
 # Default models for different tasks
 DEFAULT_MODEL = "meta/llama-3.1-8b-instruct"                    # Fast validation
 CODER_MODEL = "qwen/qwen3-next-80b-a3b-instruct"  # ✅ CORRECT
+PLANNER_MODEL = DEFAULT_MODEL
 
 print("=" * 60)
 print("LLM CLIENT INITIALIZED")
 print("=" * 60)
 print(f"Default Model: {DEFAULT_MODEL}")
 print(f"Coder Model: {CODER_MODEL}")
-print(f"API Key loaded: {NVIDIA_API_KEY[:30] if NVIDIA_API_KEY else 'NONE'}...")
+print(f"API Key loaded: {'Yes' if NVIDIA_API_KEY else 'NONE'}")
 print("=" * 60)
 
 
@@ -63,7 +65,7 @@ def get_llm_response(prompt: str, model: str = None):
             NVIDIA_URL,
             headers=headers,
             json=payload,
-            timeout=180
+            timeout=LLM_TIMEOUT_SECONDS
         )
         
         print(f"DEBUG: Status Code: {response.status_code}")
@@ -85,4 +87,4 @@ def get_llm_response(prompt: str, model: str = None):
 
 
 # Export models for use in agents
-__all__ = ["get_llm_response", "DEFAULT_MODEL", "CODER_MODEL"]
+__all__ = ["get_llm_response", "DEFAULT_MODEL", "CODER_MODEL", "PLANNER_MODEL"]

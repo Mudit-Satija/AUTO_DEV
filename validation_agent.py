@@ -1,10 +1,206 @@
 from llm_client import get_llm_response
 from schemas import ValidationResponse, TechStack, InteractiveRequest, InteractiveResponse, ConversationMessage, UserStack
+from planning_agents.shared.json_utils import extract_json
 import json
 import logging
-from typing import List
+import re
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+BACKEND_OPTIONS = ["FastAPI", "Node.js", "Express", "Django", "Spring", "Go", "Python"]
+FRONTEND_OPTIONS = ["React", "Next.js", "Vue", "Angular", "Flutter", "React Native", "Svelte"]
+DATABASE_OPTIONS = ["PostgreSQL", "MongoDB", "MySQL", "Redis", "SQLite"]
+DEPLOYMENT_OPTIONS = ["AWS", "GCP", "Azure", "Vercel", "Netlify", "Docker", "Kubernetes", "Serverless", "Self-hosted"]
+REALTIME_OPTIONS = ["WebSocket", "Polling", "SSE", "None"]
+
+FIELD_ORDER = ["backend", "frontend", "database", "deployment", "realtime"]
+SLOT_ORDER = ["project_type", "backend_framework", "frontend_framework", "database", "deployment", "realtime"]
+SLOT_TO_STACK_FIELD = {
+    "backend_framework": "backend",
+    "frontend_framework": "frontend",
+    "database": "database",
+    "deployment": "deployment",
+    "realtime": "realtime",
+}
+SLOT_TO_LABEL = {
+    "project_type": "project type",
+    "backend_framework": "backend framework",
+    "frontend_framework": "frontend framework",
+    "database": "database",
+    "deployment": "deployment",
+    "realtime": "real-time requirements",
+}
+
+
+def _normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _detect_from_text(text: str, keyword_map: Dict[str, List[str]], default_value: Optional[str] = None) -> Dict[str, Any]:
+    normalized_text = _normalize_text(text)
+    for value, keywords in keyword_map.items():
+        for keyword in keywords:
+            if keyword in normalized_text:
+                return {"value": value, "confidence": 0.96, "source": keyword}
+    if default_value is not None:
+        return {"value": default_value, "confidence": 0.4, "source": "heuristic default"}
+    return {"value": None, "confidence": 0.0, "source": None}
+
+
+def _merge_detected_fields(*detected_maps: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {}
+    for detected_map in detected_maps:
+        for field, data in detected_map.items():
+            if not data.get("value"):
+                continue
+            existing = merged.get(field)
+            if existing is None or data.get("confidence", 0.0) >= existing.get("confidence", 0.0):
+                merged[field] = data
+    return merged
+
+
+def _build_missing_fields(detected_fields: Dict[str, Dict[str, Any]]) -> List[str]:
+    return [field for field in FIELD_ORDER if not detected_fields.get(field, {}).get("value")]
+
+
+def _build_slot_ledger(prompt: str, conversation: Optional[List[ConversationMessage]] = None) -> Dict[str, Dict[str, Any]]:
+    detected_information = extract_detected_information(prompt, conversation)
+    slot_ledger: Dict[str, Dict[str, Any]] = {}
+
+    project_type = detected_information.get("project_type", {})
+    project_type_value = project_type.get("value") if isinstance(project_type, dict) else None
+    slot_ledger["project_type"] = {
+        "value": project_type_value,
+        "status": "confirmed" if project_type_value else "missing",
+    }
+
+    for slot_name, stack_field in SLOT_TO_STACK_FIELD.items():
+        slot_data = detected_information.get(stack_field, {})
+        value = slot_data.get("value") if isinstance(slot_data, dict) else None
+        source = slot_data.get("source") if isinstance(slot_data, dict) else None
+        slot_ledger[slot_name] = {
+            "value": value,
+            "status": "confirmed" if value and source != "heuristic default" else "missing",
+        }
+
+    return slot_ledger
+
+
+def _ledger_missing_slots(slot_ledger: Dict[str, Dict[str, Any]]) -> List[str]:
+    return [slot for slot in SLOT_ORDER if slot_ledger.get(slot, {}).get("status") == "missing"]
+
+
+def _ledger_to_user_stack(slot_ledger: Dict[str, Dict[str, Any]]) -> UserStack:
+    return UserStack(
+        backend=slot_ledger.get("backend_framework", {}).get("value"),
+        frontend=slot_ledger.get("frontend_framework", {}).get("value"),
+        database=slot_ledger.get("database", {}).get("value"),
+        realtime=slot_ledger.get("realtime", {}).get("value"),
+        deployment=slot_ledger.get("deployment", {}).get("value"),
+    )
+
+
+def extract_detected_information(prompt: str, conversation: Optional[List[ConversationMessage]] = None) -> Dict[str, Any]:
+    """Infer known requirements from the initial prompt and conversation."""
+
+    conversation = conversation or []
+    prompt_text = _normalize_text(prompt)
+    conversation_text = _normalize_text("\n".join(msg.content for msg in conversation if msg.role == "user"))
+    combined_text = f"{prompt_text} {conversation_text}".strip()
+
+    backend_map = {
+        "FastAPI": ["fastapi", "fast api"],
+        "Node.js": ["node.js", "nodejs", " node ", " node.js ", "node backend"],
+        "Express": ["express"],
+        "Django": ["django"],
+        "Spring": ["spring boot", "spring"],
+        "Go": ["golang", " go ", " go backend"],
+        "Python": ["python"],
+    }
+    frontend_map = {
+        "React": ["react"],
+        "Next.js": ["next.js", "nextjs", "next"],
+        "Vue": ["vue"],
+        "Angular": ["angular"],
+        "Flutter": ["flutter"],
+        "React Native": ["react native"],
+        "Svelte": ["svelte"],
+    }
+    database_map = {
+        "PostgreSQL": ["postgresql", "postgres"],
+        "MongoDB": ["mongodb", "mongo"],
+        "MySQL": ["mysql"],
+        "Redis": ["redis"],
+        "SQLite": ["sqlite"],
+    }
+    deployment_map = {
+        "AWS": ["aws"],
+        "GCP": ["gcp", "google cloud", "google cloud platform"],
+        "Azure": ["azure"],
+        "Vercel": ["vercel"],
+        "Netlify": ["netlify"],
+        "Docker": ["docker"],
+        "Kubernetes": ["kubernetes", "k8s"],
+        "Serverless": ["serverless"],
+        "Self-hosted": ["self-hosted", "self hosted"],
+    }
+    realtime_map = {
+        "WebSocket": ["websocket", "websockets", "real-time", "realtime", "live updates"],
+        "Polling": ["polling"],
+        "SSE": ["server sent events", "sse"],
+        "None": ["no real-time", "no realtime", "without realtime", "without real-time"],
+    }
+    project_type_map = {
+        "AI system": ["chatbot", "ai", "llm", "assistant", "copilot"],
+        "SaaS": ["saas", "jira", "multi-tenant", "multi tenant", "workspace", "dashboard"],
+        "CRUD backend": ["crud", "api", "rest api", "backend"],
+        "automation": ["automation", "workflow", "bot", "script"],
+        "web app": ["web app", "website", "frontend"],
+        "mobile app": ["mobile", "ios", "android", "react native", "flutter"],
+    }
+
+    detected_fields = {
+        "backend": _detect_from_text(combined_text, backend_map),
+        "frontend": _detect_from_text(combined_text, frontend_map),
+        "database": _detect_from_text(combined_text, database_map),
+        "deployment": _detect_from_text(combined_text, deployment_map),
+        "realtime": _detect_from_text(combined_text, realtime_map),
+        "project_type": _detect_from_text(combined_text, project_type_map, default_value="web app"),
+    }
+
+    assumptions = []
+    if detected_fields["project_type"]["confidence"] < 0.7:
+        assumptions.append("Assume a web app unless the prompt indicates a different product type.")
+    if not detected_fields["realtime"]["value"]:
+        assumptions.append("Assume real-time behavior is not required until confirmed.")
+
+    detected_values = {field: detected_fields[field]["value"] for field in FIELD_ORDER if detected_fields[field]["value"]}
+    missing_fields = _build_missing_fields(detected_fields)
+    missing_information = list(missing_fields)
+    if detected_fields["project_type"]["value"] == "AI system":
+        if not any(token in combined_text for token in ["llm", "openai", "anthropic", "hugging face", "local model", "model provider"]):
+            missing_information.insert(0, "LLM provider or model")
+        if not any(token in combined_text for token in ["memory", "chat history", "vector", "rag", "retrieval"]):
+            missing_information.append("memory strategy")
+
+    return {
+        "detected_values": detected_values,
+        "field_confidence": {field: detected_fields[field]["confidence"] for field in detected_fields},
+        "field_sources": {field: detected_fields[field]["source"] for field in detected_fields},
+        "missing_fields": missing_fields,
+        "missing_information": missing_information,
+        "assumptions": assumptions,
+        "project_type": detected_fields["project_type"],
+        "backend": detected_fields["backend"],
+        "frontend": detected_fields["frontend"],
+        "database": detected_fields["database"],
+        "deployment": detected_fields["deployment"],
+        "realtime": detected_fields["realtime"],
+        "confidence": round(sum(item["confidence"] for item in detected_fields.values()) / len(detected_fields), 3),
+        "summary": summarize_detected_information(detected_fields, missing_fields),
+    }
 
 # Enhanced system prompt with explicit instructions and examples
 SYSTEM_PROMPT = """You are a software requirements analyzer. Analyze the prompt and return ONLY valid JSON.
@@ -76,15 +272,11 @@ def validate_prompt(prompt: str) -> ValidationResponse:
         logger.debug(f"Raw LLM response: {response_text[:300]}")
         
         # Extract JSON from response (in case LLM adds extra text)
-        start = response_text.find('{')
-        end = response_text.rfind('}') + 1
-        
-        if start == -1 or end == 0:
+        try:
+            parsed = extract_json(response_text)
+        except (ValueError, json.JSONDecodeError):
             logger.error(f"No JSON found in response: {response_text}")
             return error_response("Invalid JSON response from LLM")
-        
-        json_str = response_text[start:end]
-        parsed = json.loads(json_str)
         logger.debug(f"Parsed JSON: {parsed}")
         
         # Validate and clean project_type
@@ -167,17 +359,23 @@ def validate_interactive(request: InteractiveRequest) -> InteractiveResponse:
     try:
         # Build conversation context
         conversation_text = "\n".join([f"{msg.role}: {msg.content}" for msg in request.conversation])
+
+        slot_ledger = _build_slot_ledger(request.prompt, request.conversation)
+        detected_information = extract_detected_information(request.prompt, request.conversation)
+        user_stack = _ledger_to_user_stack(slot_ledger)
         
-        # Check if we have enough info to finalize
-        user_stack = extract_user_stack(request.conversation)
-        
-        if has_enough_info(user_stack):
+        if _interactive_validation_complete(slot_ledger, detected_information):
             # Finalize and return validation
             return finalize_validation(request.prompt, request.conversation, user_stack)
         
         # Ask next question
-        next_question = determine_next_question(request.prompt, user_stack, conversation_text)
-        context_summary = summarize_context(request.prompt, user_stack)
+        next_question = determine_next_question(
+            request.prompt,
+            user_stack,
+            conversation_text,
+            {**detected_information, "slot_ledger": slot_ledger},
+        )
+        context_summary = summarize_context(request.prompt, user_stack, detected_information)
         
         return InteractiveResponse(
             status="collecting_info",
@@ -196,35 +394,48 @@ def validate_interactive(request: InteractiveRequest) -> InteractiveResponse:
 
 def extract_user_stack(conversation: List[ConversationMessage]) -> UserStack:
     """Extract tech choices from conversation"""
+    full_text = "\n".join([msg.content for msg in conversation if msg.role == "user"])
+    return _extract_user_stack_from_text(full_text)
+
+
+def _extract_user_stack_from_text(text: str) -> UserStack:
     stack = UserStack()
-    
-    full_text = "\n".join([msg.content.lower() for msg in conversation if msg.role == "user"])
-    
-    # Extract backend
+    full_text = _normalize_text(text)
+
     if any(word in full_text for word in ["fastapi", "fast api"]):
         stack.backend = "FastAPI"
     elif "node.js" in full_text or "nodejs" in full_text or "node" in full_text:
         stack.backend = "Node.js"
+    elif "express" in full_text:
+        stack.backend = "Express"
     elif "django" in full_text:
         stack.backend = "Django"
     elif "spring" in full_text:
         stack.backend = "Spring"
-    elif "go" in full_text:
+    elif "go" in full_text or "golang" in full_text:
         stack.backend = "Go"
-    
-    # Extract frontend
-    if "react" in full_text:
+    elif "python" in full_text:
+        stack.backend = "Python"
+
+    if "react native" in full_text:
+        stack.frontend = "React Native"
+    elif "react" in full_text:
         stack.frontend = "React"
     elif "vue" in full_text:
         stack.frontend = "Vue"
     elif "next" in full_text:
         stack.frontend = "Next.js"
+    elif "angular" in full_text:
+        stack.frontend = "Angular"
     elif "flutter" in full_text:
         stack.frontend = "Flutter"
+    elif "svelte" in full_text:
+        stack.frontend = "Svelte"
+    elif "typescript" in full_text:
+        stack.frontend = "TypeScript (likely React/Next)"
     elif "no frontend" in full_text or "none" in full_text:
         stack.frontend = "None"
-    
-    # Extract database
+
     if "postgresql" in full_text or "postgres" in full_text:
         stack.database = "PostgreSQL"
     elif "mongodb" in full_text or "mongo" in full_text:
@@ -235,89 +446,145 @@ def extract_user_stack(conversation: List[ConversationMessage]) -> UserStack:
         stack.database = "Redis"
     elif "sqlite" in full_text:
         stack.database = "SQLite"
-    
-    # Extract real-time
-    if "websocket" in full_text:
+
+    if any(word in full_text for word in ["websocket", "websockets", "real-time", "real time", "realtime", "live updates"]):
         stack.realtime = "WebSocket"
     elif "polling" in full_text:
         stack.realtime = "Polling"
+    elif "sse" in full_text or "server sent events" in full_text:
+        stack.realtime = "SSE"
     elif "no real" in full_text or "no realtime" in full_text:
         stack.realtime = "None"
-    
-    # Extract deployment
+
     if "aws" in full_text:
         stack.deployment = "AWS"
     elif "gcp" in full_text or "google" in full_text:
         stack.deployment = "GCP"
     elif "azure" in full_text:
         stack.deployment = "Azure"
-    elif "self-hosted" in full_text or "self hosted" in full_text:
-        stack.deployment = "Self-hosted"
+    elif "vercel" in full_text:
+        stack.deployment = "Vercel"
+    elif "netlify" in full_text:
+        stack.deployment = "Netlify"
+    elif "docker" in full_text:
+        stack.deployment = "Docker"
+    elif "kubernetes" in full_text or "k8s" in full_text:
+        stack.deployment = "Kubernetes"
     elif "serverless" in full_text:
         stack.deployment = "Serverless"
-    
+    elif "self-hosted" in full_text or "self hosted" in full_text:
+        stack.deployment = "Self-hosted"
+
     return stack
 
 
 def has_enough_info(user_stack: UserStack) -> bool:
     """Check if we have minimum required info: backend + frontend + database for complete project"""
-    return user_stack.backend is not None and user_stack.frontend is not None and user_stack.database is not None
+    has_core_stack = (
+        user_stack.backend is not None
+        and user_stack.frontend is not None
+        and user_stack.database is not None
+    )
+    if not has_core_stack:
+        return False
+
+    # Redis is excellent for cache, queues, sessions, and real-time presence,
+    # but most web apps still need a durable primary database.
+    return user_stack.database != "Redis"
 
 
-def determine_next_question(prompt: str, user_stack: UserStack, conversation_text: str) -> str:
+def determine_next_question(prompt: str, user_stack: UserStack, conversation_text: str, detected_information: Optional[Dict[str, Any]] = None) -> str:
     """Determine which question to ask next conversationally - never repeat questions"""
-    
-    # Check what questions have already been asked (look for characteristic keywords)
-    asked_questions = set()
-    lower_text = conversation_text.lower()
-    
-    # Detect if backend question was already asked
-    if "backend" in lower_text and "framework" in lower_text:
-        asked_questions.add("backend")
-    
-    # Detect if frontend question was already asked
-    if "frontend" in lower_text and ("react" in lower_text or "vue" in lower_text or "angular" in lower_text):
-        asked_questions.add("frontend")
-    
-    # Detect if database question was already asked
-    if "database" in lower_text and ("postgresql" in lower_text or "mongodb" in lower_text or "mysql" in lower_text):
-        asked_questions.add("database")
-    
-    # Detect if real-time question was already asked
-    if "websocket" in lower_text or ("real" in lower_text and "time" in lower_text):
-        asked_questions.add("realtime")
-    
-    # Detect if deployment question was already asked
-    if ("deploy" in lower_text or "serverless" in lower_text) and ("aws" in lower_text or "gcp" in lower_text or "azure" in lower_text):
-        asked_questions.add("deployment")
-    
-    # Ask for backend if missing and not already asked
-    if not user_stack.backend and "backend" not in asked_questions:
-        return f"I'd like to help you flesh out your idea: {prompt}. What backend framework are you thinking of using? Something like FastAPI, Node.js, Django, Spring, or Go?"
-    
-    # Ask for frontend if missing and not already asked (needed for complete project)
-    if not user_stack.frontend and "frontend" not in asked_questions:
-        return f"What about the frontend? Are you thinking React, Vue, Next.js, Angular, Flutter, or something else?"
-    
-    # Ask for database if missing and not already asked
-    if not user_stack.database and "database" not in asked_questions:
-        return f"For the database, would you prefer PostgreSQL, MongoDB, MySQL, Redis, or SQLite?"
-    
-    # Ask for real-time if missing and not already asked (optional but helpful)
-    if not user_stack.realtime and "realtime" not in asked_questions:
-        return f"Do you need real-time features like WebSockets, or is polling sufficient, or no real-time at all?"
-    
-    # Ask for deployment if missing and not already asked
-    if not user_stack.deployment and "deployment" not in asked_questions:
-        return f"Where are you planning to deploy this? AWS, GCP, Azure, self-hosted, or serverless?"
-    
+
+    if detected_information and isinstance(detected_information, dict):
+        priority_missing = [item for item in detected_information.get("missing_information", []) if item]
+        if "LLM provider or model" in priority_missing:
+            return (
+                "Which LLM provider or model should we assume for the AI system? "
+                "Examples: OpenAI, Anthropic, Hugging Face, or a local model."
+            )
+        if "memory strategy" in priority_missing:
+            return (
+                "Do you need persistent memory or retrieval for chat history, or should I assume a stateless AI workflow?"
+            )
+
+        slot_ledger = detected_information.get("slot_ledger")
+        if isinstance(slot_ledger, dict):
+            missing_slots = _ledger_missing_slots(slot_ledger)
+            if not missing_slots:
+                return "Tell me more about your project so I can help refine the requirements."
+
+            next_slot = missing_slots[0]
+            if next_slot == "project_type":
+                return "What kind of project is this: web app, mobile app, AI system, automation, CRUD backend, or SaaS?"
+            if next_slot == "backend_framework":
+                return "What backend framework are you thinking of using? Something like FastAPI, Node.js, Django, Spring, or Go?"
+            if next_slot == "frontend_framework":
+                return "What frontend framework are you thinking of using? React, Vue, Next.js, Angular, Flutter, or something else?"
+            if next_slot == "database":
+                return "For the database, would you prefer PostgreSQL, MongoDB, MySQL, Redis, or SQLite?"
+            if next_slot == "deployment":
+                return "Where are you planning to deploy this? AWS, GCP, Azure, Vercel, Netlify, self-hosted, Docker, or serverless?"
+            if next_slot == "realtime":
+                return "Do you need real-time features like WebSockets, or is polling sufficient, or no real-time at all?"
+
+    if user_stack.database == "Redis":
+        return (
+            "Redis is a strong choice for caching, sessions, queues, or real-time presence. "
+            "For durable app data, what primary database should we pair with it: PostgreSQL, MongoDB, MySQL, or SQLite?"
+        )
+
+    missing_fields = []
+    if detected_information and isinstance(detected_information, dict):
+        missing_fields = [field for field in detected_information.get("missing_fields", []) if field in FIELD_ORDER]
+
+    if not missing_fields:
+        # Fallback to legacy detection if the caller did not provide detected info.
+        lower_text = _normalize_text(conversation_text)
+        seen = set()
+        if any(k in lower_text for k in ["fastapi", "fast api", "node.js", "nodejs", "node", "django", "spring", "go", "express", "flask", "python"]):
+            seen.add("backend")
+        if any(k in lower_text for k in ["react", "vue", "next", "next.js", "angular", "flutter", "react native", "svelte", "typescript"]):
+            seen.add("frontend")
+        if any(k in lower_text for k in ["postgresql", "postgres", "mongodb", "mongo", "mysql", "redis", "sqlite"]):
+            seen.add("database")
+        if any(k in lower_text for k in ["aws", "gcp", "google", "azure", "serverless", "self-hosted", "self hosted", "docker", "vercel", "netlify"]):
+            seen.add("deployment")
+        if any(k in lower_text for k in ["websocket", "websockets", "real-time", "realtime", "polling", "sse", "server sent events", "live updates"]):
+            seen.add("realtime")
+        missing_fields = [field for field in FIELD_ORDER if getattr(user_stack, field) is None and field not in seen]
+
+    if not missing_fields:
+        return "Tell me more about your project so I can help refine the requirements."
+
+    next_field = missing_fields[0]
+    if next_field == "backend":
+        return f"What backend framework are you thinking of using for {prompt}? Something like FastAPI, Node.js, Django, Spring, or Go?"
+    if next_field == "frontend":
+        return "What about the frontend? Are you thinking React, Vue, Next.js, Angular, Flutter, or something else?"
+    if next_field == "database":
+        return "For the database, would you prefer PostgreSQL, MongoDB, MySQL, Redis, or SQLite?"
+    if next_field == "deployment":
+        return "Where are you planning to deploy this? AWS, GCP, Azure, Vercel, Netlify, self-hosted, Docker, or serverless?"
+    if next_field == "realtime":
+        return "Do you need real-time features like WebSockets, or is polling sufficient, or no real-time at all?"
+
     return "Tell me more about your project so I can help refine the requirements."
 
 
-def summarize_context(prompt: str, user_stack: UserStack) -> str:
+def summarize_context(prompt: str, user_stack: UserStack, detected_information: Optional[Dict[str, Any]] = None) -> str:
     """Summarize what we know so far"""
     details = []
     details.append(f"Your idea: {prompt}")
+
+    if detected_information and isinstance(detected_information, dict):
+        detected_values = detected_information.get("detected_values", {})
+        if detected_values:
+            detected_summary = ", ".join(f"{field}: {value}" for field, value in detected_values.items())
+            details.append(f"Detected: {detected_summary}")
+        assumptions = detected_information.get("assumptions", [])
+        if assumptions:
+            details.append("Assumptions: " + "; ".join(assumptions))
     
     if user_stack.backend:
         details.append(f"Backend: {user_stack.backend}")
@@ -331,6 +598,56 @@ def summarize_context(prompt: str, user_stack: UserStack) -> str:
         details.append(f"Deployment: {user_stack.deployment}")
     
     return " | ".join(details)
+
+
+def _interactive_validation_complete(slot_ledger: Dict[str, Dict[str, Any]], detected_information: Optional[Dict[str, Any]]) -> bool:
+    """Finalize only when the prompt-inferred gaps are resolved."""
+    if _ledger_missing_slots(slot_ledger):
+        return False
+    if not isinstance(detected_information, dict):
+        return True
+    return not detected_information.get("missing_information")
+
+
+def summarize_detected_information(detected_fields: Dict[str, Dict[str, Any]], missing_fields: List[str]) -> str:
+    detected_summary = []
+    for field in FIELD_ORDER:
+        value = detected_fields.get(field, {}).get("value")
+        if value:
+            detected_summary.append(f"{field}: {value}")
+    parts = []
+    if detected_summary:
+        parts.append("Detected: " + "; ".join(detected_summary))
+    if missing_fields:
+        parts.append("Missing: " + ", ".join(missing_fields))
+    return " | ".join(parts)
+
+
+def _merge_user_stacks(*stacks: UserStack) -> UserStack:
+    merged = UserStack()
+    for stack in stacks:
+        if stack.backend and not merged.backend:
+            merged.backend = stack.backend
+        if stack.frontend and not merged.frontend:
+            merged.frontend = stack.frontend
+        if stack.database and not merged.database:
+            merged.database = stack.database
+        if stack.realtime and not merged.realtime:
+            merged.realtime = stack.realtime
+        if stack.deployment and not merged.deployment:
+            merged.deployment = stack.deployment
+    return merged
+
+
+def _user_stack_from_detected_information(detected_information: Dict[str, Any]) -> UserStack:
+    detected_values = detected_information.get("detected_values", {}) if isinstance(detected_information, dict) else {}
+    return UserStack(
+        backend=detected_values.get("backend"),
+        frontend=detected_values.get("frontend"),
+        database=detected_values.get("database"),
+        realtime=detected_values.get("realtime"),
+        deployment=detected_values.get("deployment"),
+    )
 
 
 def finalize_validation(prompt: str, conversation: List[ConversationMessage], user_stack: UserStack) -> InteractiveResponse:
@@ -374,12 +691,10 @@ CRITICAL: Always include "recommended_stack" with all 4 categories populated."""
         if not response_text:
             return InteractiveResponse(status="error", current_question="Failed to generate final validation")
         
-        start = response_text.find('{')
-        end = response_text.rfind('}') + 1
-        if start == -1 or end == 0:
+        try:
+            parsed = extract_json(response_text)
+        except (ValueError, json.JSONDecodeError):
             return InteractiveResponse(status="error", current_question="Invalid response format")
-        
-        parsed = json.loads(response_text[start:end])
         logger.debug(f"Parsed final validation: {parsed}")
         
         # Extract recommended stack - ensure it exists

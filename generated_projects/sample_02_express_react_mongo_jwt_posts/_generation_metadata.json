@@ -1,0 +1,33 @@
+{
+  "config": {
+    "id": 2,
+    "name": "express_react_mongo_jwt_posts",
+    "rules": {
+      "backend_framework": "Express.js",
+      "frontend_framework": "React",
+      "database": "MongoDB",
+      "auth_method": "JWT",
+      "deployment": "Docker",
+      "required_backend_modules": [
+        "users",
+        "posts",
+        "comments"
+      ],
+      "required_pages": [
+        "Login",
+        "Feed",
+        "Profile"
+      ]
+    }
+  },
+  "generation": {
+    "files_generated": 29,
+    "files_written": 29,
+    "repair_attempts": 3,
+    "validations_pass": false,
+    "registry_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_02_express_react_mongo_jwt_posts\\.autodev_registry.json"
+  },
+  "export": {
+    "zip_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_02_express_react_mongo_jwt_posts.zip"
+  }
+}

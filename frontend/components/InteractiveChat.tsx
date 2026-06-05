@@ -15,20 +15,20 @@ interface InteractiveChatProps {
   onValidationComplete: (data: any) => void;
   addLog: (type: string, text: string) => void;
   phase: string;
-  onPlanFrontend: (validationData: any) => Promise<void>;
+  onPlanArchitecture: (validationData: any) => Promise<void>;
 }
 
 export default function InteractiveChat({
   onValidationComplete,
   addLog,
   phase,
-  onPlanFrontend,
+  onPlanArchitecture,
 }: InteractiveChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       type: "agent",
-      text: "Hey! 👋 I'm your AI architecture assistant. Tell me about your project idea, and I'll help you plan the perfect backend architecture.",
+      text: "Hey! I'm your AI architecture assistant. Tell me about your project idea, and I'll help you plan the perfect full-stack architecture.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -53,6 +53,10 @@ export default function InteractiveChat({
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    if (validationData) {
+      addMessage("agent", "Validation is complete, so I am using that stack to generate the architecture now.");
+      return;
+    }
 
     // Add user message
     addMessage("user", input);
@@ -70,6 +74,35 @@ export default function InteractiveChat({
       { role: "user", content: userInput },
     ];
     setConversation(updatedConversation);
+
+    // Instead of hardcoded replies, call backend /chat to get Llama-generated responses for conversational intents
+    const lowerInput = userInput.toLowerCase();
+    const conversationalTriggers = ["confused", "i'm confused", "im confused", "what would you suggest", "what do you suggest", "suggest"];
+    const isConversational = conversationalTriggers.some((t) => lowerInput.includes(t));
+
+    if (isConversational) {
+      try {
+        addLog("info", "→ Asking Llama for conversational reply...");
+        const chatResp = await fetch("http://localhost:8000/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: userInput, conversation: updatedConversation }),
+        });
+
+        if (!chatResp.ok) throw new Error("Chat API error");
+        const json = await chatResp.json();
+        const reply = json.reply || "Sorry, I couldn't generate a reply.";
+        addMessage("agent", reply);
+        setConversation((prev) => [...prev, { role: "agent", content: reply }]);
+        setIsLoading(false);
+        return;
+      } catch (err) {
+        addLog("error", `✗ Chat error: ${err}`);
+        addMessage("agent", "Sorry, I couldn't reach the chat service. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+    }
 
     try {
       // Call interactive validation endpoint
@@ -100,7 +133,7 @@ export default function InteractiveChat({
         onValidationComplete(data);
         
         setTimeout(() => {
-          onPlanFrontend(data);
+          onPlanArchitecture(data);
         }, 1000);
       } else if (data.current_question) {
         addMessage("agent", data.current_question);
@@ -124,18 +157,18 @@ export default function InteractiveChat({
     }
   };
 
-  const isDisabled = isLoading || phase !== "chat";
+  const isDisabled = isLoading || phase !== "chat" || Boolean(validationData);
 
   return (
-    <div className="glass h-full max-h-[800px] flex flex-col">
+    <div className="bg-slate-950/30 backdrop-blur-sm h-full max-h-[720px] flex flex-col text-slate-200">
       {/* Chat Header */}
-      <div className="border-b border-slate-700/30 px-4 py-3 flex items-center gap-2">
-        <MessageCircle size={18} className="text-blue-400" />
+      <div className="px-4 py-3 flex items-center gap-2">
+        <MessageCircle size={18} className="text-blue-300" />
         <h2 className="font-semibold text-slate-100">Interactive Chat</h2>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         <AnimatePresence>
           {messages.map((msg) => (
             <motion.div
@@ -146,10 +179,10 @@ export default function InteractiveChat({
               className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-xs lg:max-w-sm px-4 py-2.5 rounded-lg ${
+                className={`max-w-xs lg:max-w-sm px-3 py-2 rounded-md shadow-sm ${
                   msg.type === "user"
-                    ? "bg-blue-600/50 border border-blue-500/50 text-slate-100"
-                    : "bg-slate-800/50 border border-slate-700/50 text-slate-300"
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-800/90 text-slate-200"
                 }`}
               >
                 <p className="text-sm leading-relaxed">
@@ -187,26 +220,26 @@ export default function InteractiveChat({
       </div>
 
       {/* Input */}
-      <div className="border-t border-slate-700/30 p-4 space-y-3">
-        <div className="flex gap-2">
+      <div className="pt-3 px-3 pb-4">
+        <div className="flex gap-2 items-end">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             disabled={isDisabled}
-            placeholder={isDisabled ? "Waiting for validation..." : "Type your message..."}
-            className="flex-1 bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-50 resize-none"
+            placeholder={validationData ? "Architecture planning is in progress..." : isDisabled ? "Waiting for validation..." : "Type your message..."}
+            className="flex-1 h-20 max-h-24 overflow-y-auto bg-transparent border border-slate-800/40 rounded-md px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 disabled:opacity-50 resize-none"
             rows={2}
           />
           <button
             onClick={handleSend}
             disabled={isDisabled || !input.trim()}
-            className="btn-primary flex items-center gap-2 self-end disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send size={16} />
           </button>
         </div>
-        <p className="text-xs text-slate-500">Shift+Enter for new line</p>
+        <p className="text-xs text-slate-500 mt-2">Shift+Enter for new line</p>
       </div>
     </div>
   );

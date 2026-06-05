@@ -1,0 +1,162 @@
+{
+  "app/db/database.py": {
+    "purpose": "Database connection",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\db\\database.py"
+  },
+  "seeds/seed.js": {
+    "purpose": "Seed data script for development",
+    "type": "database",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\seeds\\seed.js"
+  },
+  "src/config/mongodb.js": {
+    "purpose": "MongoDB connection setup",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\src\\config\\mongodb.js"
+  },
+  "README.md": {
+    "purpose": "Project overview and setup instructions",
+    "type": "documentation",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\README.md"
+  },
+  ".env": {
+    "purpose": "Environment variables",
+    "type": "env",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\.env"
+  },
+  ".gitignore": {
+    "purpose": "Git ignore rules",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\.gitignore"
+  },
+  "app/__init__.py": {
+    "purpose": "App package init",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\__init__.py"
+  },
+  "app/core/config.py": {
+    "purpose": "Configuration settings",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\core\\config.py"
+  },
+  "app/core/security.py": {
+    "purpose": "Authentication and security",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\core\\security.py"
+  },
+  "app/db/base.py": {
+    "purpose": "SQLAlchemy declarative base",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\db\\base.py"
+  },
+  "app/main.py": {
+    "purpose": "FastAPI application setup",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\main.py"
+  },
+  "app/models/notes.py": {
+    "purpose": "notes SQLAlchemy model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\models\\notes.py"
+  },
+  "app/models/todos.py": {
+    "purpose": "todos SQLAlchemy model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\models\\todos.py"
+  },
+  "app/models/user.py": {
+    "purpose": "User SQLAlchemy model for authentication",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\models\\user.py"
+  },
+  "index.html": {
+    "purpose": "HTML entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\index.html"
+  },
+  "package_frontend.json": {
+    "purpose": "Frontend dependencies and scripts \u2014 must include react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\package_frontend.json"
+  },
+  "src/App.css": {
+    "purpose": "Global application styles",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\src\\App.css"
+  },
+  "src/App.jsx": {
+    "purpose": "Root application component with routing",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\src\\App.jsx"
+  },
+  "src/main.jsx": {
+    "purpose": "React entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\src\\main.jsx"
+  },
+  "src/pages/Login.jsx": {
+    "purpose": "Login page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\src\\pages\\Login.jsx"
+  },
+  "src/pages/Todos.jsx": {
+    "purpose": "Todos page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\src\\pages\\Todos.jsx"
+  },
+  "src/services/api.js": {
+    "purpose": "API client configuration using axios \u2014 uses import.meta.env.VITE_API_BASE_URL (Vite convention, not process.env)",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\src\\services\\api.js"
+  },
+  "vite.config.js": {
+    "purpose": "Vite build configuration",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\vite.config.js"
+  },
+  "app/routers/auth.py": {
+    "purpose": "Authentication routes (login, register, logout)",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\routers\\auth.py"
+  },
+  "app/routers/notes.py": {
+    "purpose": "notes API routes",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\routers\\notes.py"
+  },
+  "app/routers/todos.py": {
+    "purpose": "todos API routes",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\routers\\todos.py"
+  },
+  "app/schemas/notes.py": {
+    "purpose": "notes Pydantic schemas",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\schemas\\notes.py"
+  },
+  "app/schemas/todos.py": {
+    "purpose": "todos Pydantic schemas",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\schemas\\todos.py"
+  },
+  "app/services/notes.py": {
+    "purpose": "notes business logic",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\services\\notes.py"
+  },
+  "app/services/todos.py": {
+    "purpose": "todos business logic",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\app\\services\\todos.py"
+  },
+  "main.py": {
+    "purpose": "Application entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\main.py"
+  },
+  "requirements.txt": {
+    "purpose": "Python dependencies",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_07_fastapi_react_mongo_jwt_todos\\requirements.txt"
+  }
+}

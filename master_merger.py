@@ -64,6 +64,8 @@ def merge_backend_and_frontend(
         "layout": frontend_result.get("layout", []),
         "components": frontend_result.get("components", []),
         "navigation": frontend_result.get("navigation", []),
+        "mobile_menu": frontend_result.get("mobile_menu", "hamburger"),
+        "total_routes": frontend_result.get("total_routes", 0),
         "animations": frontend_result.get("animations", []),
         "accessibility": frontend_result.get("accessibility", {}),
         "design_system": frontend_result.get("design_system", {}),
@@ -77,12 +79,15 @@ def merge_backend_and_frontend(
     validation_block = _build_validation_block(validation_output)
     integration_points = _build_integration_points(backend_architecture, frontend_architecture, validation_block)
     combined_reasoning = _combine_reasoning(backend_result, frontend_result, validation_block)
+    recommendations = _build_recommendations(validation_block, backend_architecture, frontend_architecture)
 
     return {
         "status": "success",
         "validation": validation_block,
         "backend_architecture": backend_architecture,
         "frontend_architecture": frontend_architecture,
+        "feedback": validation_block.get("feedback", ""),
+        "recommendations": recommendations,
         "integration_points": integration_points,
         "combined_reasoning": combined_reasoning,
     }
@@ -101,7 +106,35 @@ def _build_validation_block(validation_output: Dict[str, Any]) -> Dict[str, Any]
         "alignment_score": validation_output.get("alignment_score"),
         "feedback": validation_output.get("feedback", ""),
         "reasoning": validation_output.get("reasoning", ""),
+        "recommended_stack": validation_output.get("recommended_stack", {}),
     }
+
+
+def _build_recommendations(
+    validation_block: Dict[str, Any],
+    backend_architecture: Dict[str, Any],
+    frontend_architecture: Dict[str, Any],
+) -> list[str]:
+    recommendations = []
+
+    missing_requirements = validation_block.get("missing_requirements", []) or []
+    recommendations.extend([f"Address validation gap: {item}" for item in missing_requirements])
+
+    recommended_stack = validation_block.get("recommended_stack", {}) or {}
+    backend_stack = recommended_stack.get("backend", []) if isinstance(recommended_stack, dict) else []
+    frontend_stack = recommended_stack.get("frontend", []) if isinstance(recommended_stack, dict) else []
+
+    if backend_stack:
+        recommendations.append(f"Backend stack options to consider: {', '.join(backend_stack[:3])}")
+    if frontend_stack:
+        recommendations.append(f"Frontend stack options to consider: {', '.join(frontend_stack[:3])}")
+
+    recommendations.append(
+        f"Keep backend framework {backend_architecture.get('framework', 'Unknown')} aligned with frontend framework {frontend_architecture.get('framework', 'Unknown')}."
+    )
+    recommendations.append("Use the shared validation result as the source of truth for API shape, auth, and deployment decisions.")
+
+    return recommendations
 
 
 def _build_integration_points(

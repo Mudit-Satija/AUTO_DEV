@@ -1,0 +1,129 @@
+{
+  "files_generated": 24,
+  "files_written": [
+    {
+      "path": ".env",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\.env",
+      "bytes_written": 111
+    },
+    {
+      "path": ".gitignore",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\.gitignore",
+      "bytes_written": 43
+    },
+    {
+      "path": "src/config/index.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\config\\index.js",
+      "bytes_written": 224
+    },
+    {
+      "path": "src/middleware/errorHandler.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\middleware\\errorHandler.js",
+      "bytes_written": 397
+    },
+    {
+      "path": "src/routes/index.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\routes\\index.js",
+      "bytes_written": 171
+    },
+    {
+      "path": "README.md",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\README.md",
+      "bytes_written": 2604
+    },
+    {
+      "path": "index.html",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\index.html",
+      "bytes_written": 305
+    },
+    {
+      "path": "package_frontend.json",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\package_frontend.json",
+      "bytes_written": 418
+    },
+    {
+      "path": "src/App.css",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\App.css",
+      "bytes_written": 700
+    },
+    {
+      "path": "src/App.jsx",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\App.jsx",
+      "bytes_written": 802
+    },
+    {
+      "path": "src/main.jsx",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\main.jsx",
+      "bytes_written": 213
+    },
+    {
+      "path": "src/pages/Dashboard.jsx",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\pages\\Dashboard.jsx",
+      "bytes_written": 1509
+    },
+    {
+      "path": "src/pages/Tasks.jsx",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\pages\\Tasks.jsx",
+      "bytes_written": 1295
+    },
+    {
+      "path": "src/services/api.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\services\\api.js",
+      "bytes_written": 150
+    },
+    {
+      "path": "vite.config.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\vite.config.js",
+      "bytes_written": 220
+    },
+    {
+      "path": "package.json",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\package.json",
+      "bytes_written": 529
+    },
+    {
+      "path": "src/app.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\app.js",
+      "bytes_written": 809
+    },
+    {
+      "path": "src/config/database.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\config\\database.js",
+      "bytes_written": 416
+    },
+    {
+      "path": "src/models/tasks.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\models\\tasks.js",
+      "bytes_written": 441
+    },
+    {
+      "path": "src/models/users.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\models\\users.js",
+      "bytes_written": 859
+    },
+    {
+      "path": "src/routes/auth.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\routes\\auth.js",
+      "bytes_written": 1688
+    },
+    {
+      "path": "src/routes/tasks.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\routes\\tasks.js",
+      "bytes_written": 2028
+    },
+    {
+      "path": "src/middleware/auth.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\src\\middleware\\auth.js",
+      "bytes_written": 587
+    },
+    {
+      "path": "seeds/seed.js",
+      "absolute_path": "D:\\projects\\AUTO_DEV\\generated_project\\seeds\\seed.js",
+      "bytes_written": 1448
+    }
+  ],
+  "registry_path": "D:\\projects\\AUTO_DEV\\generated_project\\.autodev_registry.json",
+  "repair_attempts": 3,
+  "all_validations_pass": false,
+  "elapsed": 55.3
+}

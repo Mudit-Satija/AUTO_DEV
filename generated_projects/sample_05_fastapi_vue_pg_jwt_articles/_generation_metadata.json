@@ -1,0 +1,33 @@
+{
+  "config": {
+    "id": 5,
+    "name": "fastapi_vue_pg_jwt_articles",
+    "rules": {
+      "backend_framework": "FastAPI",
+      "frontend_framework": "Vue",
+      "database": "PostgreSQL",
+      "auth_method": "JWT",
+      "deployment": "Docker",
+      "required_backend_modules": [
+        "articles",
+        "categories",
+        "tags"
+      ],
+      "required_pages": [
+        "Login",
+        "Home",
+        "Articles"
+      ]
+    }
+  },
+  "generation": {
+    "files_generated": 37,
+    "files_written": 37,
+    "repair_attempts": 3,
+    "validations_pass": false,
+    "registry_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_05_fastapi_vue_pg_jwt_articles\\.autodev_registry.json"
+  },
+  "export": {
+    "zip_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_05_fastapi_vue_pg_jwt_articles.zip"
+  }
+}

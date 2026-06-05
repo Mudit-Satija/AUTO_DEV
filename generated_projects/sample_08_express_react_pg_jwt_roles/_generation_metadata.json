@@ -1,0 +1,33 @@
+{
+  "config": {
+    "id": 8,
+    "name": "express_react_pg_jwt_roles",
+    "rules": {
+      "backend_framework": "Express.js",
+      "frontend_framework": "React",
+      "database": "PostgreSQL",
+      "auth_method": "JWT",
+      "deployment": "Heroku",
+      "required_backend_modules": [
+        "roles",
+        "permissions",
+        "users"
+      ],
+      "required_pages": [
+        "Login",
+        "Dashboard",
+        "Admin"
+      ]
+    }
+  },
+  "generation": {
+    "files_generated": 29,
+    "files_written": 29,
+    "repair_attempts": 3,
+    "validations_pass": false,
+    "registry_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_08_express_react_pg_jwt_roles\\.autodev_registry.json"
+  },
+  "export": {
+    "zip_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_08_express_react_pg_jwt_roles.zip"
+  }
+}

@@ -10,8 +10,10 @@ import { motion } from "framer-motion";
 export default function Home() {
   const [phase, setPhase] = useState<"chat" | "planning" | "result">("chat");
   const [validationData, setValidationData] = useState<any>(null);
-  const [frontendData, setFrontendData] = useState<any>(null);
+  const [architectureData, setArchitectureData] = useState<any>(null);
   const [modelInfo, setModelInfo] = useState<any>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generationResult, setGenerationResult] = useState<any>(null);
   const [logs, setLogs] = useState<Array<{ id: string; type: string; text: string; time: string }>>([]);
 
   // Fetch model info on mount
@@ -41,17 +43,43 @@ export default function Home() {
     setPhase("planning");
   };
 
-  const handleFrontendPlanningComplete = (frontendPlan: any) => {
-    setFrontendData(frontendPlan);
-    addLog("success", `✓ Frontend architecture plan generated`);
+  const handleArchitecturePlanningComplete = (architecturePlan: any) => {
+    setArchitectureData(architecturePlan);
+    addLog("success", "✓ Backend and frontend architecture plans generated");
     setPhase("result");
   };
 
   const handleReset = () => {
     setPhase("chat");
     setValidationData(null);
-    setFrontendData(null);
+    setArchitectureData(null);
+    setGenerationResult(null);
     setLogs([]);
+  };
+
+  const handleGenerateProject = async () => {
+    if (!architectureData?.build_plan || !architectureData?.project_rules) return;
+    setGenerating(true);
+    setGenerationResult(null);
+    addLog("info", "→ Generating project files...");
+    try {
+      const response = await fetch("http://localhost:8000/generate-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          build_plan: architectureData.build_plan,
+          project_rules: architectureData.project_rules,
+        }),
+      });
+      if (!response.ok) throw new Error("API error");
+      const data = await response.json();
+      setGenerationResult(data);
+      addLog("success", `✓ Project generated: ${data.files_generated} files written`);
+    } catch (error) {
+      addLog("error", `✗ Project generation failed: ${error}`);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -93,24 +121,27 @@ export default function Home() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Chat/Input Column */}
-          <div className="lg:col-span-1 order-2 lg:order-1">
+          <div className="lg:col-span-1 order-2 lg:order-1 min-h-0">
             <InteractiveChat 
               onValidationComplete={handleValidationComplete}
               addLog={addLog}
               phase={phase}
-              onPlanFrontend={async (validationPayload) => {
-                addLog("info", "→ Starting frontend planning...");
+              onPlanArchitecture={async (validationPayload) => {
+                addLog("info", "→ Starting backend + frontend planning in parallel...");
                 try {
-                  const response = await fetch("http://localhost:8000/plan-frontend", {
+                  const response = await fetch("http://localhost:8000/plan-full-architecture", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ validation_output: validationPayload }),
                   });
                   if (!response.ok) throw new Error("API error");
                   const data = await response.json();
-                  handleFrontendPlanningComplete(data);
+                  if (data.status !== "success") {
+                    throw new Error(data.reasoning || "Planning failed");
+                  }
+                  handleArchitecturePlanningComplete(data);
                 } catch (error) {
-                  addLog("error", `✗ Frontend planning failed: ${error}`);
+                  addLog("error", `✗ Full architecture planning failed: ${error}`);
                 }
               }}
             />
@@ -123,8 +154,73 @@ export default function Home() {
               validationData={validationData}
             />
 
-            {phase === "result" && frontendData && (
-              <FrontendArchitecture data={frontendData} />
+            {phase === "result" && architectureData && (
+              <div className="space-y-6">
+                <ArchitectureResult
+                  data={architectureData.backend_architecture}
+                  onNewProject={handleReset}
+                />
+                <FrontendArchitecture data={architectureData} />
+
+                {architectureData.project_rules && (
+                  <details className="glass rounded-lg group">
+                    <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-slate-300 hover:text-slate-100 transition-colors flex items-center justify-between list-none [&::-webkit-details-marker]:hidden">
+                      <span>Project Rules</span>
+                      <span className="text-slate-500 group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div className="px-6 pb-4 border-t border-slate-700/30 pt-3">
+                      <pre className="text-xs text-slate-400 font-mono whitespace-pre-wrap break-words">
+                        {JSON.stringify(architectureData.project_rules, null, 2)}
+                      </pre>
+                    </div>
+                  </details>
+                )}
+
+                {architectureData.build_plan && (
+                  <details className="glass rounded-lg group">
+                    <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-slate-300 hover:text-slate-100 transition-colors flex items-center justify-between list-none [&::-webkit-details-marker]:hidden">
+                      <span>Build Plan</span>
+                      <span className="text-slate-500 group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div className="px-6 pb-4 border-t border-slate-700/30 pt-3">
+                      <div className="space-y-2">
+                        {(architectureData.build_plan.files ?? []).map((file: any, idx: number) => (
+                          <div key={idx} className="flex items-start gap-3 p-2 bg-slate-900/30 border border-slate-700/30 rounded text-xs">
+                            <span className="text-blue-400 font-mono flex-shrink-0">{file.path}</span>
+                            <span className="text-slate-500">—</span>
+                            <span className="text-slate-400">{file.purpose}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </details>
+                )}
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleGenerateProject}
+                  disabled={generating}
+                  className="w-full btn-primary flex items-center justify-center gap-2 py-3"
+                >
+                  {generating ? (
+                    <>Generating...</>
+                  ) : (
+                    <>Generate Project</>
+                  )}
+                </motion.button>
+
+                {generationResult && (
+                  <div className="glass p-4 text-sm text-green-400">
+                    Generated {generationResult.files_generated} files
+                    {generationResult.registry_path && (
+                      <span className="block text-xs text-slate-400 mt-1">
+                        Registry: {generationResult.registry_path}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -1,0 +1,33 @@
+{
+  "config": {
+    "id": 1,
+    "name": "express_react_pg_jwt_workspaces",
+    "rules": {
+      "backend_framework": "Express.js",
+      "frontend_framework": "React",
+      "database": "PostgreSQL",
+      "auth_method": "JWT",
+      "deployment": "AWS",
+      "required_backend_modules": [
+        "workspaces",
+        "projects",
+        "tasks"
+      ],
+      "required_pages": [
+        "Login",
+        "Dashboard",
+        "Settings"
+      ]
+    }
+  },
+  "generation": {
+    "files_generated": 30,
+    "files_written": 30,
+    "repair_attempts": 1,
+    "validations_pass": true,
+    "registry_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_01_express_react_pg_jwt_workspaces\\.autodev_registry.json"
+  },
+  "export": {
+    "zip_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_01_express_react_pg_jwt_workspaces.zip"
+  }
+}

@@ -51,6 +51,8 @@ class BackendArchitecturePlan(BaseModel):
     
     design_patterns: List[str] = Field(default_factory=list, description="Recommended patterns: MVC, Service Layer, etc")
     clarification_questions: List[str] = Field(default_factory=list, description="Questions needing clarification")
+    consistency_score: Optional[int] = Field(default=100, description="Deterministic stack consistency score")
+    conflicts_found: List[str] = Field(default_factory=list, description="Stack conflicts detected during validation")
     reasoning: str = Field(description="Why these recommendations")
 
 

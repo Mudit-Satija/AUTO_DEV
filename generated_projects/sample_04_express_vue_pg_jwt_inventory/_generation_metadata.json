@@ -1,0 +1,33 @@
+{
+  "config": {
+    "id": 4,
+    "name": "express_vue_pg_jwt_inventory",
+    "rules": {
+      "backend_framework": "Express.js",
+      "frontend_framework": "Vue",
+      "database": "PostgreSQL",
+      "auth_method": "JWT",
+      "deployment": "DigitalOcean",
+      "required_backend_modules": [
+        "inventory",
+        "orders",
+        "customers"
+      ],
+      "required_pages": [
+        "Login",
+        "Dashboard",
+        "Orders"
+      ]
+    }
+  },
+  "generation": {
+    "files_generated": 30,
+    "files_written": 30,
+    "repair_attempts": 3,
+    "validations_pass": false,
+    "registry_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_04_express_vue_pg_jwt_inventory\\.autodev_registry.json"
+  },
+  "export": {
+    "zip_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_04_express_vue_pg_jwt_inventory.zip"
+  }
+}

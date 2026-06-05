@@ -1,0 +1,187 @@
+{
+  "app/services/teams.py": {
+    "purpose": "teams business logic",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\services\\teams.py"
+  },
+  "main.py": {
+    "purpose": "Application entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\main.py"
+  },
+  "requirements.txt": {
+    "purpose": "Python dependencies",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\requirements.txt"
+  },
+  "app/db/database.py": {
+    "purpose": "Database connection",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\db\\database.py"
+  },
+  "migrations/001_initial.sql": {
+    "purpose": "Initial database schema migration",
+    "type": "database",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\migrations\\001_initial.sql"
+  },
+  "seeds/seed.sql": {
+    "purpose": "Seed data for development",
+    "type": "database",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\seeds\\seed.sql"
+  },
+  "README.md": {
+    "purpose": "Project overview and setup instructions",
+    "type": "documentation",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\README.md"
+  },
+  ".env": {
+    "purpose": "Environment variables",
+    "type": "env",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\.env"
+  },
+  ".gitignore": {
+    "purpose": "Git ignore rules",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\.gitignore"
+  },
+  "app/__init__.py": {
+    "purpose": "App package init",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\__init__.py"
+  },
+  "app/core/config.py": {
+    "purpose": "Configuration settings",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\core\\config.py"
+  },
+  "app/core/security.py": {
+    "purpose": "Authentication and security",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\core\\security.py"
+  },
+  "app/db/base.py": {
+    "purpose": "SQLAlchemy declarative base",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\db\\base.py"
+  },
+  "app/main.py": {
+    "purpose": "FastAPI application setup",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\main.py"
+  },
+  "app/models/projects.py": {
+    "purpose": "projects SQLAlchemy model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\models\\projects.py"
+  },
+  "app/models/tasks.py": {
+    "purpose": "tasks SQLAlchemy model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\models\\tasks.py"
+  },
+  "app/models/teams.py": {
+    "purpose": "teams SQLAlchemy model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\models\\teams.py"
+  },
+  "index.html": {
+    "purpose": "HTML entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\index.html"
+  },
+  "package_frontend.json": {
+    "purpose": "Frontend dependencies and scripts \u2014 must include react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\package_frontend.json"
+  },
+  "src/App.css": {
+    "purpose": "Global application styles",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\src\\App.css"
+  },
+  "src/App.jsx": {
+    "purpose": "Root application component with routing",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\src\\App.jsx"
+  },
+  "src/main.jsx": {
+    "purpose": "React entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\src\\main.jsx"
+  },
+  "src/pages/Dashboard.jsx": {
+    "purpose": "Dashboard page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\src\\pages\\Dashboard.jsx"
+  },
+  "src/pages/Login.jsx": {
+    "purpose": "Login page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\src\\pages\\Login.jsx"
+  },
+  "src/pages/Teams.jsx": {
+    "purpose": "Teams page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\src\\pages\\Teams.jsx"
+  },
+  "src/services/api.js": {
+    "purpose": "API client configuration using axios \u2014 uses import.meta.env.VITE_API_BASE_URL (Vite convention, not process.env)",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\src\\services\\api.js"
+  },
+  "vite.config.js": {
+    "purpose": "Vite build configuration",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\vite.config.js"
+  },
+  "app/models/user.py": {
+    "purpose": "User SQLAlchemy model for authentication",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\models\\user.py"
+  },
+  "app/routers/auth.py": {
+    "purpose": "Authentication routes (login, register, logout)",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\routers\\auth.py"
+  },
+  "app/routers/projects.py": {
+    "purpose": "projects API routes",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\routers\\projects.py"
+  },
+  "app/routers/tasks.py": {
+    "purpose": "tasks API routes",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\routers\\tasks.py"
+  },
+  "app/routers/teams.py": {
+    "purpose": "teams API routes",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\routers\\teams.py"
+  },
+  "app/schemas/projects.py": {
+    "purpose": "projects Pydantic schemas",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\schemas\\projects.py"
+  },
+  "app/schemas/tasks.py": {
+    "purpose": "tasks Pydantic schemas",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\schemas\\tasks.py"
+  },
+  "app/schemas/teams.py": {
+    "purpose": "teams Pydantic schemas",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\schemas\\teams.py"
+  },
+  "app/services/projects.py": {
+    "purpose": "projects business logic",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\services\\projects.py"
+  },
+  "app/services/tasks.py": {
+    "purpose": "tasks business logic",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_03_fastapi_react_pg_oauth_tasks\\app\\services\\tasks.py"
+  }
+}

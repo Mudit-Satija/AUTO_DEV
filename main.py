@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from llm_client import DEFAULT_MODEL, CODER_MODEL
+from llm_client import get_llm_response, DEFAULT_MODEL, CODER_MODEL, PLANNER_MODEL
 from schemas import ValidationRequest, ValidationResponse, InteractiveRequest, InteractiveResponse
 from validation_agent import validate_prompt, validate_interactive
 from backend_schemas import (
@@ -12,9 +12,14 @@ from backend_schemas import (
     APIEndpoint,
     FolderStructure,
 )
-from backend_planning_agent import plan_backend
+from backend_agents.planning_agent import plan_backend
 from master_orchestrator import orchestrate_full_architecture
+from coding_agent.project_generator import generate_project
+from coding_agent.file_generator import generate_file
+from coding_agent.file_writer import write_file
+from coding_agent.prompt_builder import build_file_prompt
 import logging
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -51,7 +56,11 @@ async def validate(request: ValidationRequest) -> ValidationResponse:
     Returns structured JSON with validation results
     """
     logger.info(f"Received validation request: {request.prompt[:100]}")
+    started = time.perf_counter()
     response = validate_prompt(request.prompt)
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    feedback_text = getattr(response, "feedback", "") or ""
+    logger.info("[PERF]\nValidation Agent: %d ms\nOutput Size: %d chars\nOutput Words: %d", elapsed_ms, len(feedback_text), len(feedback_text.split()))
     logger.info(f"Returning validation response: status={response.status}")
     return response
 
@@ -64,9 +73,44 @@ async def validate_interactive_endpoint(request: InteractiveRequest) -> Interact
     Returns either next question or final validation
     """
     logger.info(f"Interactive validation: {request.prompt[:100]}")
+    started = time.perf_counter()
     response = validate_interactive(request)
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    output_text = (getattr(response, "current_question", "") or "") + " " + (getattr(response, "feedback", "") or "")
+    logger.info("[PERF]\nValidation Agent: %d ms\nOutput Size: %d chars\nOutput Words: %d", elapsed_ms, len(output_text), len(output_text.split()))
     logger.info(f"Interactive response status: {response.status}")
     return response
+
+
+@app.post("/chat")
+async def chat_endpoint(request: dict):
+    """General conversational endpoint backed by the DEFAULT_MODEL (Llama 3.1).
+
+    Expects JSON: { "prompt": string, "conversation": [{role, content}], "mode": optional }
+    Returns: { "reply": string }
+    """
+    prompt = request.get("prompt") or ""
+    conversation = request.get("conversation", [])
+    mode = request.get("mode", "assistant")
+
+    # Build a concise prompt that instructs the model to reply helpfully and empathetically
+    system_prefix = (
+        "You are an expert AI assistant for software architecture. Reply concisely, empathetically, and "
+        "provide clear next steps or suggestions when asked. If the user asks for suggestions, include a brief "
+        "recommended stack (backend, frontend, database, devops). Do NOT return code blocks unless explicitly requested."
+    )
+
+    # Merge conversation into context for the model
+    conv_text = "\n".join([f"{m.get('role')}: {m.get('content')}" for m in conversation])
+
+    full_prompt = f"{system_prefix}\n\nConversation:\n{conv_text}\n\nUser: {prompt}\nAssistant:"
+
+    try:
+        reply = get_llm_response(full_prompt, model=DEFAULT_MODEL)
+        return {"reply": reply}
+    except Exception as e:
+        logger.error(f"/chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/plan-backend", response_model=BackendArchitecturePlan)
@@ -191,7 +235,7 @@ async def plan_frontend(request: BackendPlanRequest):
         }
         
         # Import and run frontend orchestrator
-        from frontend_orchestrator import orchestrate_frontend_planning
+        from frontend_agents.orchestrator import orchestrate_frontend_planning
         
         # FastAPI already runs this handler inside an event loop, so await directly.
         frontend_plan = await orchestrate_frontend_planning(validation_data)
@@ -222,12 +266,92 @@ async def plan_full_architecture_endpoint(request: dict) -> dict:
     if not isinstance(validation_output, dict):
         raise HTTPException(status_code=400, detail="Missing validation_output")
 
+    request_start = time.perf_counter()
     logger.info(
         "Starting full architecture planning for %s",
         validation_output.get("project_type", "unknown"),
     )
 
-    return await orchestrate_full_architecture(validation_output)
+    result = await orchestrate_full_architecture(validation_output)
+    elapsed_ms = int((time.perf_counter() - request_start) * 1000)
+    logger.info("[PERF]\nTotal Request Time: %d ms", elapsed_ms)
+    return result
+
+
+@app.post("/generate-file")
+async def generate_single_file_endpoint(request: dict) -> dict:
+    """Generate, log timing for, and persist a single file.
+
+    Input: { "file_blueprint": {...}, "project_rules": {...}, "output_dir": "..." }
+    """
+    file_blueprint = request.get("file_blueprint")
+    project_rules = request.get("project_rules")
+    output_dir = request.get("output_dir", "generated_project")
+
+    if not isinstance(file_blueprint, dict):
+        raise HTTPException(status_code=400, detail="Missing or invalid file_blueprint")
+    if not isinstance(project_rules, dict):
+        raise HTTPException(status_code=400, detail="Missing or invalid project_rules")
+
+    # 1. Build prompt and log its size
+    prompt = build_file_prompt(file_blueprint, project_rules)
+    logger.info("PROMPT length: %d characters", len(prompt))
+
+    # 2. Generate — measure timing
+    file_path = file_blueprint.get("path", "unknown")
+    logger.info("GENERATE START: %s", file_path)
+    gen_start = time.perf_counter()
+    generated = generate_file(file_blueprint, project_rules)
+    gen_end = time.perf_counter()
+    gen_duration = gen_end - gen_start
+    logger.info(
+        "GENERATE END:   %s  (%.2f s)",
+        file_path,
+        gen_duration,
+    )
+
+    # 3. Write to disk
+    metadata = write_file(generated, output_dir)
+
+    logger.info(
+        "WRITE:          %s  (%d bytes)",
+        metadata.get("path"),
+        metadata.get("bytes_written", 0),
+    )
+
+    return {
+        "path": metadata.get("path"),
+        "bytes_written": metadata.get("bytes_written", 0),
+        "generation_duration_s": round(gen_duration, 2),
+    }
+
+
+@app.post("/generate-project")
+async def generate_project_endpoint(request: dict) -> dict:
+    """Generate project files from a build plan and project rules.
+
+    Expects JSON: { "build_plan": {...}, "project_rules": {...}, "output_dir": "..." }
+    """
+    build_plan = request.get("build_plan")
+    project_rules = request.get("project_rules")
+    output_dir = request.get("output_dir", "generated_project")
+
+    if not isinstance(build_plan, dict):
+        raise HTTPException(status_code=400, detail="Missing or invalid build_plan")
+    if not isinstance(project_rules, dict):
+        raise HTTPException(status_code=400, detail="Missing or invalid project_rules")
+
+    try:
+        result = generate_project(build_plan, project_rules, output_dir)
+        logger.info(
+            "Project generation complete: %d files written to %s",
+            result["files_generated"],
+            output_dir,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Project generation failed: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Project generation failed: {str(e)}")
 
 
 @app.get("/info")
@@ -236,7 +360,7 @@ async def model_info():
     return {
         "validation_model": DEFAULT_MODEL,
         "backend_model": CODER_MODEL,
-        "frontend_model": CODER_MODEL,
+        "frontend_model": PLANNER_MODEL,
         "frontend_planning_agents": [
             "layout_agent",
             "component_agent",

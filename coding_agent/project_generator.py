@@ -1,0 +1,288 @@
+"""Project Generator — generates and persists all files from a build plan.
+
+Uses bundle generation (multiple files per Qwen call) with automatic
+fallback to single-file generation when bundle validation fails.
+
+Independent bundles (backend, frontend, database, docs) are executed
+in parallel using a thread pool for I/O-bound LLM calls.
+
+After initial generation, an auto-repair loop re-generates any files
+that fail import, smoke, or requirement validation.
+"""
+
+import logging
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from coding_agent.bundle_generator import generate_bundle_with_fallback, group_and_partition_files
+from coding_agent.dependency_graph import validate_graph, validate_imports
+from coding_agent.file_registry import register_file, save_registry
+from coding_agent.file_writer import write_file
+from coding_agent.prompt_builder import build_file_prompt
+from coding_agent.requirement_validator import validate_requirements
+from coding_agent.smoke_test import run_smoke_tests
+from llm_client import CODER_MODEL, get_llm_response
+
+logger = logging.getLogger(__name__)
+
+MAX_REPAIR_ATTEMPTS = 3
+
+
+def _run_bundle(
+    bundle_name: str,
+    file_blueprints: list,
+    project_rules: dict,
+    output_dir: str,
+) -> tuple:
+    """Execute a single bundle in isolation and return (written_metadata, local_registry)."""
+    local_registry: dict = {}
+    written = generate_bundle_with_fallback(
+        bundle_name, file_blueprints, project_rules, output_dir, local_registry,
+    )
+    return written, local_registry
+
+
+# ---------------------------------------------------------------------------
+# Auto-repair helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_file_from_import_error(error_msg: str) -> str | None:
+    """Parse the file path from an import validation error message.
+
+    Error format::
+
+        Import Validation Failed
+
+            src/controllers/workspaces.js
+
+        references
+
+            ../models/workspaces
+
+        which was not generated.
+    """
+    lines = error_msg.strip().split("\n")
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped and lines[i - 1].strip() == "" if i > 0 else False:
+            return stripped.replace("\\", "/")
+    return None
+
+
+def _extract_file_from_smoke_error(error_msg: str) -> str | None:
+    """Parse a file path from a smoke-test error message.
+
+    Matches patterns like: "JS syntax error in src/file.js: ..."
+    """
+    m = re.search(r"in\s+([^\s:]+):", error_msg)
+    if m:
+        return m.group(1).replace("\\", "/")
+    return None
+
+
+def _collect_repair_errors(build_plan: dict, project_rules: dict, output_dir: str) -> dict:
+    """Run all post-generation validations and group errors by file path.
+
+    Returns ``{file_path: [error_string, ...]}``.
+    """
+    errors_by_file: dict = {}
+
+    # Import validation
+    for err in validate_imports(build_plan, output_dir):
+        file_path = _extract_file_from_import_error(err)
+        if not file_path:
+            file_path = "unknown"
+        errors_by_file.setdefault(file_path, []).append(err)
+
+    # Smoke tests
+    for err in run_smoke_tests(output_dir, project_rules):
+        file_path = _extract_file_from_smoke_error(err)
+        if not file_path:
+            file_path = "unknown"
+        errors_by_file.setdefault(file_path, []).append(err)
+
+    # Requirement coverage
+    req_result = validate_requirements(output_dir, build_plan)
+    if not req_result["success"]:
+        for e in req_result["errors"]:
+            file_path = e.get("file", "unknown")
+            msg = f"Requirement '{e['requirement']}': {e['error']}"
+            errors_by_file.setdefault(file_path, []).append(msg)
+
+    return errors_by_file
+
+
+def _build_repair_prompt(
+    blueprint: dict,
+    project_rules: dict,
+    errors: list[str],
+    attempt: int,
+) -> str:
+    """Build a prompt that includes the original file context plus error feedback."""
+    prompt = build_file_prompt(blueprint, project_rules)
+    prompt += (
+        f"\n\nPREVIOUS GENERATION HAD VALIDATION ERRORS (attempt {attempt}):\n"
+    )
+    for err in errors:
+        prompt += f"  - {err}\n"
+    prompt += (
+        "\nRegenerate the file above. Fix ALL errors listed. "
+        "Return only the raw source code, no markdown or explanations."
+    )
+    return prompt
+
+
+def _repair_failing_files(
+    errors_by_file: dict,
+    build_plan: dict,
+    project_rules: dict,
+    output_dir: str,
+    written: list,
+    registry: dict,
+) -> tuple[list, dict]:
+    """Regenerate each failing file with error context and return updated (written, registry)."""
+    blueprints_by_path = {bp["path"]: bp for bp in build_plan.get("files", [])}
+
+    for file_path, error_list in errors_by_file.items():
+        bp = blueprints_by_path.get(file_path)
+        if not bp:
+            logger.warning("Repair: no blueprint for %s, skipping", file_path)
+            continue
+
+        logger.warning("Repairing %s (%d errors)", file_path, len(error_list))
+        repair_prompt = _build_repair_prompt(bp, project_rules, error_list, MAX_REPAIR_ATTEMPTS)
+        content = get_llm_response(repair_prompt, model=CODER_MODEL)
+        meta = write_file({"path": file_path, "content": content}, output_dir)
+        register_file(registry, bp, meta)
+        written = [w for w in written if w["path"] != file_path] + [meta]
+
+    return written, registry
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def generate_project(
+    build_plan: dict,
+    project_rules: dict,
+    output_dir: str,
+    max_repair_attempts: int = MAX_REPAIR_ATTEMPTS,
+) -> dict:
+    """Generate and write all files in a build plan to disk.
+
+    Files are grouped into bundles (backend, frontend, database, docs)
+    and generated in parallel. If a bundle fails validation, individual
+    files fall back to single-file generation.
+
+    After initial generation an auto-repair loop re-generates any files
+    that fail import, smoke, or requirement validation (up to
+    *max_repair_attempts* rounds).
+
+    Args:
+        build_plan: Output from build_plan.generate_build_plan() with key "files".
+        project_rules: Output from rules_engine.build_project_rules().
+        output_dir: Root directory for the generated project.
+        max_repair_attempts: How many repair rounds before giving up (default 3).
+
+    Returns:
+        Dict with keys:
+            files_generated (int): total files processed
+            files_written (list[dict]): metadata from write_file() per file
+            registry_path (str or None): path to saved .autodev_registry.json
+            repair_attempts (int): how many repair rounds were executed
+            all_validations_pass (bool): whether all post-gen checks passed
+    """
+    files = build_plan.get("files", [])
+
+    # Phase 1: Pre-generation dependency graph validation
+    dep_errors = validate_graph(build_plan)
+    if dep_errors:
+        msg = "Dependency Validation Failed\n\n" + "\n".join(dep_errors)
+        logger.error(msg)
+        raise ValueError(msg)
+
+    registry: dict = {}
+    written: list = []
+
+    bundles = group_and_partition_files(files)
+    logger.info(
+        "Grouped %d files into %d bundles (max %d per bundle): %s",
+        len(files), len(bundles), 10, list(bundles.keys()),
+    )
+
+    if not bundles:
+        return {
+            "files_generated": 0,
+            "files_written": [],
+            "registry_path": None,
+            "repair_attempts": 0,
+            "all_validations_pass": True,
+        }
+
+    with ThreadPoolExecutor(max_workers=len(bundles)) as executor:
+        future_map = {
+            executor.submit(
+                _run_bundle, name, bundles[name], project_rules, output_dir,
+            ): name
+            for name in sorted(bundles.keys())
+        }
+
+        for future in as_completed(future_map):
+            name = future_map[future]
+            try:
+                written_local, registry_local = future.result()
+                written.extend(written_local)
+                registry.update(registry_local)
+            except Exception:
+                logger.exception("Bundle [%s] failed", name)
+
+    registry_path = None
+    if registry:
+        registry_path = save_registry(registry, output_dir)
+
+    result = {
+        "files_generated": len(files),
+        "files_written": written,
+        "registry_path": registry_path,
+        "repair_attempts": 0,
+        "all_validations_pass": True,
+    }
+
+    # Auto-repair loop
+    for attempt in range(1, max_repair_attempts + 1):
+        errors_by_file = _collect_repair_errors(build_plan, project_rules, output_dir)
+        if not errors_by_file:
+            logger.info("All post-generation validations passed")
+            result["repair_attempts"] = attempt - 1
+            result["all_validations_pass"] = True
+            return result
+
+        logger.warning(
+            "Repair attempt %d/%d: %d files with errors",
+            attempt, max_repair_attempts, len(errors_by_file),
+        )
+
+        written, registry = _repair_failing_files(
+            errors_by_file, build_plan, project_rules, output_dir,
+            written, registry,
+        )
+
+        registry_path = save_registry(registry, output_dir)
+        result["files_written"] = written
+        result["registry_path"] = registry_path
+
+    # Final validation after all repairs exhausted
+    final_errors = _collect_repair_errors(build_plan, project_rules, output_dir)
+    result["repair_attempts"] = max_repair_attempts
+    result["all_validations_pass"] = not final_errors
+    if final_errors:
+        total = sum(len(v) for v in final_errors.values())
+        logger.warning(
+            "Repair exhausted after %d attempts — %d remaining errors",
+            max_repair_attempts, total,
+        )
+
+    return result

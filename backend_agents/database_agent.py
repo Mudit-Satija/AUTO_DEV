@@ -1,6 +1,9 @@
 import json
 import logging
 from llm_client import get_llm_response
+from planning_agents.shared.json_utils import extract_json
+from planning_agents.shared.rules import RuleManager
+from planning_agents.shared.domain_intelligence import domain_context_summary
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +14,8 @@ RULES:
 - Recommend appropriate ORM
 - Consider caching strategy
 - Return ONLY valid JSON
+
+{rules}
 
 Return this JSON (NO other text):
 {{
@@ -29,8 +34,13 @@ def analyze_database(validation_output: dict) -> dict:
             validation_output = {}
             
         database = validation_output.get("user_stack", {}).get("database", "PostgreSQL")
+        domain_context = validation_output.get("domain_context", {}) if isinstance(validation_output.get("domain_context"), dict) else {}
+        rules = RuleManager.from_validation_output(validation_output)
         
-        prompt = DATABASE_PROMPT.format(database=database)
+        prompt = DATABASE_PROMPT.format(
+            database=database,
+            rules=rules.prompt_context("database") + "\n" + domain_context_summary(domain_context),
+        )
         logger.info(f"→ Database Agent: Analyzing {database}...")
         response_text = get_llm_response(prompt)
         
@@ -38,14 +48,11 @@ def analyze_database(validation_output: dict) -> dict:
             logger.error("Response is not a string")
             return {"type": database, "orm": "Unknown", "cache": "None", "migration_tool": "N/A", "recommendations": []}
         
-        start = response_text.find('{')
-        end = response_text.rfind('}') + 1
-        
-        if start == -1 or end == 0:
-            logger.error("No JSON in database response")
-            return {"type": database, "orm": "Unknown", "cache": "None", "migration_tool": "N/A", "recommendations": []}
-        
-        result = json.loads(response_text[start:end])
+        result = extract_json(response_text)
+        if domain_context.get("backend"):
+            result["reasoning"] = (
+                f"{result.get('reasoning', '')}\nDomain models: {', '.join(domain_context.get('database', {}).get('preferred_tables', [])[:8])}".strip()
+            )
         logger.info(f"✓ Database Agent: {result.get('type', 'Unknown')} + {result.get('orm', 'Unknown')}")
         return result
         

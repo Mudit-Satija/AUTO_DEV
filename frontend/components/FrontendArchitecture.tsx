@@ -11,7 +11,15 @@ interface FrontendArchitectureProps {
 export default function FrontendArchitecture({ data }: FrontendArchitectureProps) {
   const [expandedSection, setExpandedSection] = useState<string>("architecture");
 
-  if (!data || data.status !== "success") {
+  const frontendArchitecture = data?.frontend_architecture ?? data;
+  const accessibility = frontendArchitecture?.accessibility ?? data?.accessibility ?? {};
+  const components = frontendArchitecture?.components ?? data?.components ?? [];
+  const designSystem = frontendArchitecture?.design_system ?? data?.design_system ?? {};
+  const navigation = frontendArchitecture?.navigation ?? data?.navigation ?? [];
+  const breakpoints = frontendArchitecture?.breakpoints ?? data?.breakpoints ?? {};
+  const totalComponents = frontendArchitecture?.components?.length ?? data?.total_components ?? 0;
+
+  if (!data || (data.status && data.status !== "success")) {
     return (
       <div className="text-center py-8">
         <p className="text-red-400">Frontend planning failed</p>
@@ -24,31 +32,31 @@ export default function FrontendArchitecture({ data }: FrontendArchitectureProps
       id: "architecture",
       title: "🏗️ Frontend Architecture",
       icon: Layout,
-      content: data.frontend_architecture,
+      content: frontendArchitecture,
     },
     {
       id: "components",
       title: "🧩 Components",
       icon: Sparkles,
-      content: data.components,
+      content: components,
     },
     {
       id: "design",
       title: "🎨 Design System",
       icon: Palette,
-      content: data.design_system,
+      content: designSystem,
     },
     {
       id: "navigation",
       title: "🧭 Navigation",
       icon: Navigation,
-      content: data.navigation,
+      content: navigation,
     },
     {
       id: "accessibility",
       title: "♿ Accessibility",
       icon: Accessibility,
-      content: data.accessibility,
+      content: accessibility,
     },
   ];
 
@@ -70,23 +78,23 @@ export default function FrontendArchitecture({ data }: FrontendArchitectureProps
           <div className="space-y-2 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-400">Framework:</span>
-              <span className="text-white font-semibold">{data.frontend_architecture?.framework || "N/A"}</span>
+              <span className="text-white font-semibold">{frontendArchitecture?.framework || "N/A"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Language:</span>
-              <span className="text-white font-semibold">{data.frontend_architecture?.language || "N/A"}</span>
+              <span className="text-white font-semibold">{frontendArchitecture?.language || "N/A"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Styling:</span>
-              <span className="text-white font-semibold">{data.frontend_architecture?.styling || "N/A"}</span>
+              <span className="text-white font-semibold">{frontendArchitecture?.styling || "N/A"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">WCAG Level:</span>
-              <span className="text-green-400 font-semibold">{data.accessibility?.wcag_level || "N/A"}</span>
+              <span className="text-green-400 font-semibold">{accessibility?.wcag_level || "N/A"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Components:</span>
-              <span className="text-white font-semibold">{data.total_components || "N/A"}</span>
+              <span className="text-white font-semibold">{totalComponents || "N/A"}</span>
             </div>
           </div>
         </motion.div>
@@ -98,8 +106,8 @@ export default function FrontendArchitecture({ data }: FrontendArchitectureProps
         >
           <h3 className="text-sm font-semibold text-purple-400 mb-3">📱 Responsive Breakpoints</h3>
           <div className="space-y-2 text-xs">
-            {data.breakpoints &&
-              Object.entries(data.breakpoints).map(([key, value]) => (
+            {breakpoints &&
+              Object.entries(breakpoints).map(([key, value]) => (
                 <div key={key} className="flex justify-between">
                   <span className="text-slate-400 capitalize">{key}:</span>
                   <span className="text-white font-mono">{String(value)}</span>

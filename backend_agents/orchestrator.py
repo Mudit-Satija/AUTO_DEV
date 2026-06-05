@@ -2,6 +2,7 @@ import logging
 from typing import Dict
 from . import architecture_agent, auth_agent, endpoint_agent, database_agent, folder_structure_agent, dependency_agent
 from .merger import merge_agent_results
+from planning_agents.shared.domain_intelligence import build_domain_context
 
 logger = logging.getLogger(__name__)
 
@@ -25,29 +26,32 @@ def orchestrate_backend_planning(validation_output: Dict) -> Dict:
     logger.info("="*60)
     
     try:
+        shared_state = dict(validation_output or {})
+        shared_state["domain_context"] = build_domain_context(shared_state)
+
         # Step 1: Architecture Analysis
         logger.info("\n[1/6] Architecture Agent...")
-        arch_result = architecture_agent.analyze_architecture(validation_output)
+        arch_result = architecture_agent.analyze_architecture(shared_state)
         
         # Step 2: Authentication Analysis
         logger.info("\n[2/6] Authentication Agent...")
-        auth_result = auth_agent.analyze_authentication(validation_output)
+        auth_result = auth_agent.analyze_authentication(shared_state)
         
         # Step 3: Endpoint Design
         logger.info("\n[3/6] Endpoint Agent...")
-        endpoint_result = endpoint_agent.analyze_endpoints(validation_output)
+        endpoint_result = endpoint_agent.analyze_endpoints(shared_state)
         
         # Step 4: Database Analysis
         logger.info("\n[4/6] Database Agent...")
-        db_result = database_agent.analyze_database(validation_output)
+        db_result = database_agent.analyze_database(shared_state)
         
         # Step 5: Folder Structure
         logger.info("\n[5/6] Folder Structure Agent...")
-        folder_result = folder_structure_agent.analyze_folder_structure(validation_output, arch_result)
+        folder_result = folder_structure_agent.analyze_folder_structure(shared_state, arch_result)
         
         # Step 6: Dependencies
         logger.info("\n[6/6] Dependency Agent...")
-        dep_result = dependency_agent.analyze_dependencies(validation_output, arch_result, db_result)
+        dep_result = dependency_agent.analyze_dependencies(shared_state, arch_result, db_result)
         
         # Collect all results
         all_results = {
@@ -64,7 +68,7 @@ def orchestrate_backend_planning(validation_output: Dict) -> Dict:
         logger.info("="*60)
         
         # Merge all results into final output
-        final_result = merge_agent_results(all_results, validation_output)
+        final_result = merge_agent_results(all_results, shared_state)
         
         logger.info("\n" + "="*60)
         logger.info("✓ PIPELINE COMPLETE - RETURNING FINAL ARCHITECTURE PLAN")

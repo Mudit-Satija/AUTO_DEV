@@ -1,0 +1,23 @@
+{
+  "success": true,
+  "generation_time_s": 37.83,
+  "sequential_3x_estimate_s": 24.39,
+  "response_size_chars": 4285,
+  "files_requested": 3,
+  "files_returned": 3,
+  "file_details": {
+    "package.json": {
+      "status": "not valid JSON",
+      "chars": 379
+    },
+    "src/app.js": {
+      "status": "ok",
+      "chars": 703
+    },
+    "src/routes/projects.js": {
+      "status": "ok",
+      "chars": 2899
+    }
+  },
+  "model": "qwen/qwen3-next-80b-a3b-instruct"
+}

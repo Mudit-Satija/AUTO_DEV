@@ -1,0 +1,32 @@
+{
+  "config": {
+    "id": 10,
+    "name": "express_vue_mongo_noauth_events",
+    "rules": {
+      "backend_framework": "Express.js",
+      "frontend_framework": "Vue",
+      "database": "MongoDB",
+      "auth_method": "",
+      "deployment": "AWS",
+      "required_backend_modules": [
+        "events",
+        "registrations"
+      ],
+      "required_pages": [
+        "Home",
+        "Events",
+        "Register"
+      ]
+    }
+  },
+  "generation": {
+    "files_generated": 26,
+    "files_written": 16,
+    "repair_attempts": 3,
+    "validations_pass": false,
+    "registry_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_10_express_vue_mongo_noauth_events\\.autodev_registry.json"
+  },
+  "export": {
+    "zip_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_10_express_vue_mongo_noauth_events.zip"
+  }
+}

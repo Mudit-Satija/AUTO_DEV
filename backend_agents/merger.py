@@ -1,6 +1,10 @@
+import json
 import logging
 from typing import Dict
 from backend_schemas import BackendArchitecturePlan, AuthenticationStrategy, DatabaseStrategy, APIEndpoint, FolderStructure
+from planning_agents.shared.rules import RuleManager
+from planning_agents.shared.consistency_validator import ConsistencyValidator
+from planning_agents.shared.domain_intelligence import build_domain_context
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +15,10 @@ def merge_agent_results(all_results: Dict, validation_output: Dict) -> Dict:
     """
     
     try:
+        rules = RuleManager.from_validation_output(validation_output)
+        domain_context = build_domain_context(validation_output)
+        validator = ConsistencyValidator(validation_output)
+
         # Safely extract each result, ensuring they're dicts
         arch = all_results.get("architecture", {})
         if not isinstance(arch, dict):
@@ -42,7 +50,7 @@ def merge_agent_results(all_results: Dict, validation_output: Dict) -> Dict:
             logger.warning(f"Dependencies result is not dict: {type(deps)}")
             deps = {}
         
-        logger.info("Merging agent results...")
+        logger.info("Merging agent results... domain=%s", domain_context.get("domain"))
         
         # Build authentication strategy with defaults
         auth_strategy = AuthenticationStrategy(
@@ -119,6 +127,31 @@ def merge_agent_results(all_results: Dict, validation_output: Dict) -> Dict:
             clarification_questions=[],
             reasoning=combined_reasoning
         )
+
+        pre_validation_plan = final_plan.dict()
+        logger.info("[PRE-VALIDATION PLAN]\n%s", json.dumps(pre_validation_plan, indent=2, default=str))
+        logger.info("BACKEND PLANNING PATH: Validation -> ProjectState -> Rules Engine -> Backend Planner -> Consistency Validator -> Final Output")
+        logger.info("CONSISTENCY VALIDATOR STARTED")
+        sanitized_plan, report = validator.enforce_backend_plan(pre_validation_plan)
+        logger.info("[CONFLICT DETECTED]\n%s", json.dumps(report.get("conflicts_found", []), indent=2, default=str))
+        logger.info("[REPLACEMENT]\n%s", json.dumps(report.get("corrections_made", []), indent=2, default=str))
+        logger.info("Consistency Score: %s", report.get("consistency_score", 0))
+        logger.info("[POST-VALIDATION PLAN]\n%s", json.dumps(sanitized_plan, indent=2, default=str))
+        if not report.get("is_valid", False):
+            logger.error(
+                "Consistency validation failed: %s",
+                "; ".join(report.get("conflicts_found", [])) or "unknown conflicts",
+            )
+            return {
+                "status": "error",
+                "reasoning": "Consistency validation failed: " + "; ".join(report.get("conflicts_found", [])),
+                "consistency_score": report.get("consistency_score", 0),
+                "conflicts_found": report.get("conflicts_found", []),
+            }
+
+        sanitized_plan["consistency_score"] = report.get("consistency_score", 100)
+        sanitized_plan["conflicts_found"] = report.get("conflicts_found", [])
+        final_plan = BackendArchitecturePlan(**sanitized_plan)
         
         logger.info(f"✓ Merged into final plan: {final_plan.framework}")
         
@@ -128,26 +161,41 @@ def merge_agent_results(all_results: Dict, validation_output: Dict) -> Dict:
     except Exception as e:
         logger.error(f"Merger failed: {e}", exc_info=True)
         # Return valid plan even on error
+        rules = RuleManager.from_validation_output(validation_output)
+        framework = rules.framework
+        language = rules.language
+        if framework == "Node.js":
+            auth_libraries = ["jsonwebtoken", "bcrypt"]
+            database_orm = "Prisma"
+            core_libraries = ["express", "jsonwebtoken", "prisma", "cors", "dotenv", "bcrypt"]
+        elif framework == "FastAPI":
+            auth_libraries = ["python-jose", "passlib[bcrypt]"]
+            database_orm = "SQLAlchemy"
+            core_libraries = ["fastapi", "uvicorn", "sqlalchemy", "pydantic", "python-jose", "passlib[bcrypt]"]
+        else:
+            auth_libraries = ["Spring Security", "jjwt-api"]
+            database_orm = "Spring Data JPA"
+            core_libraries = ["spring-boot-starter-web", "spring-boot-starter-security", "spring-boot-starter-data-jpa"]
         return {
             "status": "success",
-            "framework": "Unknown",
-            "language": "Unknown",
+            "framework": framework,
+            "language": language,
             "api_style": "REST",
             "authentication": {
                 "method": "JWT",
                 "storage": "httpOnly cookies",
                 "refresh_strategy": "Token rotation",
-                "libraries": []
+                "libraries": auth_libraries,
             },
             "database": {
                 "type": "PostgreSQL",
-                "orm": "Unknown",
+                "orm": database_orm,
                 "connection_pool": True,
                 "migration_tool": "N/A"
             },
             "suggested_endpoints": [],
             "folder_structure": [],
-            "core_libraries": [],
+            "core_libraries": core_libraries,
             "optional_libraries": {},
             "design_patterns": ["MVC"],
             "clarification_questions": [],

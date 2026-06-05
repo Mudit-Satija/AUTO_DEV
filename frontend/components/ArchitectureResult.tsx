@@ -9,6 +9,9 @@ interface ArchitectureResultProps {
 }
 
 export default function ArchitectureResult({ data, onNewProject }: ArchitectureResultProps) {
+  const coreLibraries = data?.core_libraries ?? data?.dependencies?.core_libraries ?? [];
+  const designPatterns = data?.design_patterns ?? data?.dependencies?.design_patterns ?? [];
+
   const handleDownload = () => {
     const element = document.createElement("a");
     const file = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -142,7 +145,7 @@ export default function ArchitectureResult({ data, onNewProject }: ArchitectureR
         <div className="glass p-6">
           <h3 className="text-sm font-semibold mb-3 text-slate-300 uppercase tracking-wider">Core Libraries</h3>
           <div className="flex flex-wrap gap-2">
-            {data.core_libraries?.map((lib: string, idx: number) => (
+            {coreLibraries.map((lib: string, idx: number) => (
               <span key={idx} className="text-xs bg-slate-900/50 border border-slate-700/50 text-slate-300 px-2.5 py-1 rounded">
                 {lib}
               </span>
@@ -153,7 +156,7 @@ export default function ArchitectureResult({ data, onNewProject }: ArchitectureR
         <div className="glass p-6">
           <h3 className="text-sm font-semibold mb-3 text-slate-300 uppercase tracking-wider">Design Patterns</h3>
           <div className="flex flex-wrap gap-2">
-            {data.design_patterns?.map((pattern: string, idx: number) => (
+            {designPatterns.map((pattern: string, idx: number) => (
               <span key={idx} className="text-xs bg-purple-900/30 border border-purple-700/50 text-purple-300 px-2.5 py-1 rounded">
                 {pattern}
               </span>

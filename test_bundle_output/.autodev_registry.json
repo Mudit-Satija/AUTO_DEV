@@ -1,0 +1,97 @@
+{
+  "src/server.js": {
+    "purpose": "Server entry point",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\server.js"
+  },
+  "migrations/001_create_users.sql": {
+    "purpose": "Users table creation migration",
+    "type": "database",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\migrations\\001_create_users.sql"
+  },
+  "src/models/User.js": {
+    "purpose": "User database model",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\models\\User.js"
+  },
+  "index.html": {
+    "purpose": "Frontend HTML entry point",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\index.html"
+  },
+  "package_frontend.json": {
+    "purpose": "Frontend dependencies and scripts Vite",
+    "type": "config",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\package_frontend.json"
+  },
+  "src/App.jsx": {
+    "purpose": "Root React application component",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\App.jsx"
+  },
+  "src/main.jsx": {
+    "purpose": "React entry point for frontend",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\main.jsx"
+  },
+  "vite.config.js": {
+    "purpose": "Frontend Vite build configuration",
+    "type": "config",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\vite.config.js"
+  },
+  "README.md": {
+    "purpose": "Project README documentation",
+    "type": "documentation",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\README.md"
+  },
+  ".env.example": {
+    "purpose": "Environment variable template file",
+    "type": "env",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\.env.example"
+  },
+  "package.json": {
+    "purpose": "Node.js dependencies and scripts",
+    "type": "config",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\package.json"
+  },
+  "src/app.js": {
+    "purpose": "Express application setup",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\app.js"
+  },
+  "src/config/db.js": {
+    "purpose": "PostgreSQL connection pool setup",
+    "type": "config",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\config\\db.js"
+  },
+  "src/config/index.js": {
+    "purpose": "Configuration loader",
+    "type": "config",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\config\\index.js"
+  },
+  "src/middleware/auth.js": {
+    "purpose": "JWT authentication middleware",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\middleware\\auth.js"
+  },
+  "src/middleware/errorHandler.js": {
+    "purpose": "Global express error handler",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\middleware\\errorHandler.js"
+  },
+  "src/routes/auth.js": {
+    "purpose": "Auth routes for login and register",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\routes\\auth.js"
+  },
+  "src/routes/projects.js": {
+    "purpose": "Project CRUD route handlers",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\routes\\projects.js"
+  },
+  "src/routes/tasks.js": {
+    "purpose": "Task CRUD route handlers",
+    "type": "source",
+    "absolute_path": "C:\\Users\\User\\OneDrive\\Desktop\\Auto_devv\\AUTO_DEV\\test_bundle_output\\src\\routes\\tasks.js"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "config": {
+    "id": 9,
+    "name": "fastapi_react_pg_oauth_products",
+    "rules": {
+      "backend_framework": "FastAPI",
+      "frontend_framework": "React",
+      "database": "PostgreSQL",
+      "auth_method": "OAuth",
+      "deployment": "GCP",
+      "required_backend_modules": [
+        "products",
+        "reviews",
+        "orders"
+      ],
+      "required_pages": [
+        "Login",
+        "Products",
+        "Cart"
+      ]
+    }
+  },
+  "generation": {
+    "files_generated": 37,
+    "files_written": 37,
+    "repair_attempts": 3,
+    "validations_pass": false,
+    "registry_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_09_fastapi_react_pg_oauth_products\\.autodev_registry.json"
+  },
+  "export": {
+    "zip_path": "D:\\projects\\AUTO_DEV\\generated_projects\\sample_09_fastapi_react_pg_oauth_products.zip"
+  }
+}

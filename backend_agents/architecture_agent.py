@@ -1,6 +1,9 @@
 import json
 import logging
 from llm_client import get_llm_response
+from planning_agents.shared.json_utils import extract_json
+from planning_agents.shared.rules import RuleManager
+from planning_agents.shared.domain_intelligence import domain_context_summary
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +15,8 @@ STRICT RULES:
 
 PROJECT CONTEXT:
 {context}
+
+{rules}
 
 Return this JSON structure (NO other text):
 {{
@@ -30,9 +35,11 @@ def analyze_architecture(validation_output: dict) -> dict:
             
         backend = validation_output.get("user_stack", {}).get("backend", "Unknown")
         project_type = validation_output.get("project_type", "web app")
+        domain_context = validation_output.get("domain_context", {}) if isinstance(validation_output.get("domain_context"), dict) else {}
+        rules = RuleManager.from_validation_output(validation_output)
         
-        context = f"Backend: {backend}, Project Type: {project_type}"
-        prompt = ARCHITECTURE_PROMPT.format(context=context)
+        context = f"Backend: {backend}, Project Type: {project_type}\n{domain_context_summary(domain_context)}"
+        prompt = ARCHITECTURE_PROMPT.format(context=context, rules=rules.prompt_context("architecture"))
         
         logger.info("→ Architecture Agent: Analyzing architecture...")
         response_text = get_llm_response(prompt)
@@ -41,14 +48,7 @@ def analyze_architecture(validation_output: dict) -> dict:
             logger.error("Response is not a string")
             return {"framework": backend, "language": "Unknown", "api_style": "REST", "pattern": "MVC"}
         
-        start = response_text.find('{')
-        end = response_text.rfind('}') + 1
-        
-        if start == -1 or end == 0:
-            logger.error("No JSON in architecture response")
-            return {"framework": backend, "language": "Unknown", "api_style": "REST", "pattern": "MVC"}
-        
-        result = json.loads(response_text[start:end])
+        result = extract_json(response_text)
         logger.info(f"✓ Architecture Agent: {result.get('framework', 'Unknown')}")
         return result
         
