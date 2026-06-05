@@ -1,5 +1,7 @@
 ﻿"""Build Plan Generator â€” converts project_rules into a deterministic file blueprint."""
 
+import re
+from pathlib import Path
 from typing import Any, Dict, List
 
 
@@ -38,7 +40,12 @@ def generate_build_plan(project_rules: dict) -> dict:
     files.extend(_get_frontend_files(frontend_fw, pages))
 
     # 4. Database files
-    files.extend(_get_database_files(database, backend_fw))
+    files.extend(_get_database_files(database, backend_fw, modules, auth_method))
+
+    # 5. Assign bundle membership so the build plan is the source of truth
+    for f in files:
+        f["bundle"] = _infer_bundle(f)
+        f["provides"] = _infer_provides(f["path"], f["type"], database, backend_fw)
 
     return {"files": files}
 
@@ -51,6 +58,127 @@ def _dedup(items: List[str]) -> List[str]:
             seen.add(item)
             result.append(item)
     return result
+
+
+def _pascal_case(stem: str) -> str:
+    parts = re.split(r"[-_\s]", stem)
+    return "".join(p.capitalize() for p in parts)
+
+
+def _model_name(stem: str) -> str:
+    name = _pascal_case(stem)
+    if name.endswith("s") and len(name) > 1:
+        name = name[:-1]
+    return name
+
+
+def _infer_provides(path: str, ftype: str, database: str = "", backend_fw: str = "") -> List[str]:
+    _never_imported = {
+        ".gitignore", ".env", "package.json", "package_frontend.json",
+        "vite.config.js", "index.html", "postcss.config.js",
+        "requirements.txt", "pom.xml", "README.md",
+        "src/main.jsx", "src/main.js",
+    }
+    if path in _never_imported:
+        return []
+    if path.endswith(".css") or path.endswith(".scss"):
+        return []
+    if path.endswith("__init__.py"):
+        return []
+    if path.endswith("application.yml"):
+        return []
+
+    if ftype == "database" or path.startswith("migrations/") or path.startswith("seeds/"):
+        return []
+
+    stem = Path(path).stem
+    db_val = (database or "").strip().lower()
+    db_kind = (
+        "mongo" if "mongo" in db_val
+        else "sql" if ("postgres" in db_val or "mysql" in db_val or "sql" in db_val)
+        else "unknown"
+    )
+    fw_val = (backend_fw or "").lower()
+    is_node = "express" in fw_val or "node" in fw_val
+    is_python = "fastapi" in fw_val or "python" in fw_val
+
+    if ftype == "page":
+        return [_pascal_case(stem)]
+    if path == "src/App.jsx" or path == "src/App.vue":
+        return ["App"]
+    if path == "src/services/api.js":
+        return ["api"]
+    if path.startswith("src/pages/") or path.startswith("src/views/"):
+        return [_pascal_case(stem)]
+    if path == "src/router/index.js":
+        return ["router"]
+
+    if is_node:
+        if path == "src/config/database.js":
+            return ["connectDB"] if db_kind == "mongo" else ["pool"]
+        if path == "src/app.js":
+            return ["app"]
+        if path.startswith("src/models/"):
+            return [_model_name(stem)]
+        if path.startswith("src/routes/"):
+            return ["router"]
+        if path == "src/middleware/auth.js":
+            return ["authenticateToken"]
+        if path == "src/middleware/errorHandler.js":
+            return ["errorHandler"]
+
+    if is_python:
+        if path == "app/db/database.py":
+            return ["db", "get_db"]
+        if path == "app/main.py":
+            return ["app"]
+        if path == "app/core/config.py":
+            return ["settings"]
+        if path == "app/core/security.py":
+            return ["get_current_user"]
+        if path == "app/db/base.py":
+            return ["Base"]
+        if path.startswith("app/models/"):
+            return [_model_name(stem)]
+        if path.startswith("app/routers/"):
+            return ["router"]
+        if path.startswith("app/schemas/"):
+            return [_model_name(stem)]
+        if path.startswith("app/services/"):
+            return [_model_name(stem)]
+
+    if path == "src/app.js":
+        return ["app"]
+
+    return []
+
+
+def _infer_bundle(blueprint: dict) -> str:
+    path = blueprint.get("path", "")
+    ftype = blueprint.get("type", "")
+    purpose = blueprint.get("purpose", "")
+
+    if ftype == "documentation" or path == "README.md":
+        return "docs"
+    if ftype == "database":
+        return "database"
+    if path.startswith("migrations/") or path.startswith("seeds/"):
+        return "database"
+    if "migration" in purpose.lower() or "seed" in purpose.lower():
+        return "database"
+    if ftype == "page":
+        return "frontend"
+    if "frontend" in purpose.lower() or "react" in purpose.lower() or "vue" in purpose.lower():
+        return "frontend"
+    if path.startswith("src/pages/") or path.startswith("src/views/"):
+        return "frontend"
+    if path in ("vite.config.js", "index.html", "postcss.config.js", "src/main.jsx", "src/main.js",
+                 "src/App.jsx", "src/App.vue", "src/App.css", "src/router/index.js",
+                 "package_frontend.json"):
+        return "frontend"
+    if "services/api" in path:
+        return "frontend"
+    return "backend"
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +611,7 @@ def _sanitize_page_name(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _get_database_files(database: str, backend_fw: str = "") -> List[Dict[str, str]]:
+def _get_database_files(database: str, backend_fw: str = "", modules: List[str] = None, auth_method: str = "") -> List[Dict[str, str]]:
     files: List[Dict[str, str]] = []
     db_kind = _db_kind(database)
     backend_val = (backend_fw or "").lower()
@@ -507,11 +635,18 @@ def _get_database_files(database: str, backend_fw: str = "") -> List[Dict[str, s
     elif db_kind == "mongo":
         seed_path = "seeds/seed.py" if "fastapi" in backend_val or "python" in backend_val else "seeds/seed.js"
         db_dep = "app/db/database.py" if seed_path.endswith(".py") else "src/config/database.js"
+        depends_on = [db_dep]
+        model_deps = []
+        if _auth_is_meaningful(auth_method):
+            model_deps.append("app/models/user.py" if seed_path.endswith(".py") else "src/models/users.js")
+        for module in (modules or []):
+            model_deps.append(f"app/models/{module}.py" if seed_path.endswith(".py") else f"src/models/{module}.js")
+        depends_on.extend(_dedup(model_deps))
         files.append({
             "path": seed_path,
             "type": "database",
             "purpose": "MongoDB seed data script for development",
-            "depends_on": [db_dep],
+            "depends_on": depends_on,
             "provides": [],
             "requirements": ["seed data"],
         })

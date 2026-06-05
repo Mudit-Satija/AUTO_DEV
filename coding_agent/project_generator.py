@@ -118,9 +118,10 @@ def _build_repair_prompt(
     project_rules: dict,
     errors: list[str],
     attempt: int,
+    all_blueprints: list = None,
 ) -> str:
     """Build a prompt that includes the original file context plus error feedback."""
-    prompt = build_file_prompt(blueprint, project_rules)
+    prompt = build_file_prompt(blueprint, project_rules, all_blueprints)
     prompt += (
         f"\n\nPREVIOUS GENERATION HAD VALIDATION ERRORS (attempt {attempt}):\n"
     )
@@ -151,7 +152,7 @@ def _repair_failing_files(
             continue
 
         logger.warning("Repairing %s (%d errors)", file_path, len(error_list))
-        repair_prompt = _build_repair_prompt(bp, project_rules, error_list, MAX_REPAIR_ATTEMPTS)
+        repair_prompt = _build_repair_prompt(bp, project_rules, error_list, MAX_REPAIR_ATTEMPTS, build_plan.get("files", []))
         content = get_llm_response(repair_prompt, model=CODER_MODEL)
         meta = write_file({"path": file_path, "content": content}, output_dir)
         register_file(registry, bp, meta)

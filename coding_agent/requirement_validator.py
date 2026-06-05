@@ -90,13 +90,15 @@ def _check_component_export(content: str, suffix: str, bp: dict) -> bool:
 
 
 def _check_app_rendering(content: str, suffix: str, bp: dict) -> bool:
+    if suffix == ".html":
+        return True
     if suffix in (".js", ".jsx"):
         if re.search(r"(render|createRoot|mount|hydrate)\s*\(", content):
             return True
     if suffix == ".py":
         if re.search(r"uvicorn\.run|app\.run", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_server_start(content: str, suffix: str, bp: dict) -> bool:
@@ -138,16 +140,16 @@ def _check_route_aggregation(content: str, suffix: str, bp: dict) -> bool:
     if suffix in (".js", ".jsx"):
         if re.search(r"require\s*\(\s*['\"]\./|from\s+['\"]\./", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_route_configuration(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".vue":
-        return bool(re.search(r"\S", content.strip()))
+        return False
     if suffix in (".js", ".jsx"):
         if re.search(r"(routes?|Router|createBrowserRouter)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_config_export(content: str, suffix: str, bp: dict) -> bool:
@@ -157,7 +159,7 @@ def _check_config_export(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".py":
         if re.search(r"Settings|config|Config", content, re.IGNORECASE):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_db_connection(content: str, suffix: str, bp: dict) -> bool:
@@ -178,13 +180,13 @@ def _check_db_connection(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".java":
         if re.search(r"(DataSource|EntityManager|DataSourceConfig)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_jwt(content: str, suffix: str, bp: dict) -> bool:
     if re.search(r"(jwt|jsonwebtoken|JWT|sign|verify|token)", content, re.IGNORECASE):
         return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_error_handler(content: str, suffix: str, bp: dict) -> bool:
@@ -196,7 +198,7 @@ def _check_error_handler(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".py":
         if re.search(r"HTTPException|ExceptionHandler|error", content, re.IGNORECASE):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_api_functions(content: str, suffix: str, bp: dict) -> bool:
@@ -206,7 +208,7 @@ def _check_api_functions(content: str, suffix: str, bp: dict) -> bool:
         ))
     if suffix == ".py":
         return bool(re.search(r"(async\s+)?def\s+\w+", content))
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_crud_list(content: str, suffix: str, bp: dict) -> bool:
@@ -232,7 +234,7 @@ def _check_controller_functions(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".py":
         if re.search(r"(async\s+)?def\s+\w+", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_model_definition(content: str, suffix: str, bp: dict) -> bool:
@@ -246,14 +248,14 @@ def _check_model_definition(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".py":
         if re.search(r"(class\s+\w+|Column|Table|Model|Base)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_schema_creation(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".sql":
         if re.search(r"(CREATE\s+TABLE|CREATE\s+INDEX|CREATE\s+SCHEMA)", content, re.IGNORECASE):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_seed_data(content: str, suffix: str, bp: dict) -> bool:
@@ -263,14 +265,14 @@ def _check_seed_data(content: str, suffix: str, bp: dict) -> bool:
     if suffix in (".js", ".jsx"):
         if re.search(r"(insert|seed|create|save)\s*\(", content, re.IGNORECASE):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_declarative_base(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".py":
         if re.search(r"(declarative_base|Base\s*=\s*|metadata)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_security_config(content: str, suffix: str, bp: dict) -> bool:
@@ -280,7 +282,7 @@ def _check_security_config(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".java":
         if re.search(r"(Security|SecurityConfig|@Enable)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_business_logic(content: str, suffix: str, bp: dict) -> bool:
@@ -290,42 +292,42 @@ def _check_business_logic(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".java":
         if re.search(r"(class\s+\w+Service|@Service)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_data_access(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".java":
         if re.search(r"(Repository|@Repository|JpaRepository|CrudRepository)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_entity_definition(content: str, suffix: str, bp: dict) -> bool:
     if suffix == ".java":
         if re.search(r"(@Entity|@Table|class\s+\w+\s*\{)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_application_setup(content: str, suffix: str, bp: dict) -> bool:
     if suffix in (".js", ".jsx"):
         if re.search(r"(express|app|require|import)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_module_functions(content: str, suffix: str, bp: dict) -> bool:
     if suffix in (".js", ".jsx"):
         if re.search(r"(module\.exports|export\s+|function\s+)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 def _check_page_content(content: str, suffix: str, bp: dict) -> bool:
     if suffix in (".js", ".jsx"):
         if re.search(r"(function|class|const|import|export)", content):
             return True
-    return bool(re.search(r"\S", content.strip()))
+    return False
 
 
 # ---------------------------------------------------------------------------

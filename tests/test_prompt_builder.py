@@ -136,7 +136,7 @@ def test_prompt_starts_with_role():
 
 def test_prompt_ends_with_instructions():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    assert prompt.endswith("like 'config/database'.")
+    assert prompt.endswith("do NOT destructure")
 
 
 def test_all_context_fields_listed():

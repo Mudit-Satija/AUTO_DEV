@@ -49,14 +49,15 @@ def _classify(blueprint: dict) -> str:
     if ftype == "documentation" or path == "README.md":
         return "docs"
 
-    # Database
+    # Database — classified by explicit type + path patterns only,
+    # never by purpose keywords that technology-bleed (e.g. "mongo",
+    # "database" appear in backend-file purposes like "MongoDB database
+    # connection" or "User database model").
     if ftype == "database":
         return "database"
     if path.startswith("migrations/") or path.startswith("seeds/"):
         return "database"
-    if "database" in purpose.lower() or "migration" in purpose.lower() or "seed" in purpose.lower():
-        return "database"
-    if "mongo" in purpose.lower():
+    if "migration" in purpose.lower() or "seed" in purpose.lower():
         return "database"
 
     # Frontend
@@ -67,14 +68,13 @@ def _classify(blueprint: dict) -> str:
     if path.startswith("src/pages/") or path.startswith("src/views/"):
         return "frontend"
     if path in ("vite.config.js", "index.html", "postcss.config.js", "src/main.jsx", "src/main.js",
-                 "src/App.jsx", "src/App.vue", "src/App.css", "src/router/index.js"):
-        return "frontend"
-    if path == "package.json" and "frontend" in purpose.lower():
+                 "src/App.jsx", "src/App.vue", "src/App.css", "src/router/index.js",
+                 "package_frontend.json"):
         return "frontend"
     if "services/api" in path:
         return "frontend"
 
-    # Backend (catch-all â€” most files land here)
+    # Backend (catch-all — most files land here)
     return "backend"
 
 
@@ -306,7 +306,7 @@ def generate_bundle_with_fallback(
             logger.info("Bundle [%s] using bundled content for %s", bundle_name, path)
         else:
             logger.info("Bundle [%s] generating individually: %s", bundle_name, path)
-            result = generate_single_file(bp, project_rules)
+            result = generate_single_file(bp, project_rules, file_blueprints)
             content = result.get("content", "")
         metadata = write_file({"path": path, "content": content}, output_dir)
         register_file(registry, bp, metadata)

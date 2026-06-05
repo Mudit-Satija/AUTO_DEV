@@ -1,0 +1,147 @@
+{
+  "seeds/seed.js": {
+    "purpose": "MongoDB seed data script for development",
+    "type": "database",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\seeds\\seed.js"
+  },
+  "README.md": {
+    "purpose": "Project overview and setup instructions",
+    "type": "documentation",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\README.md"
+  },
+  ".env": {
+    "purpose": "Environment variables",
+    "type": "env",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\.env"
+  },
+  ".gitignore": {
+    "purpose": "Git ignore rules",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\.gitignore"
+  },
+  "package.json": {
+    "purpose": "Node.js dependencies and scripts - must include express, mongoose, dotenv, cors, jsonwebtoken, bcrypt as dependencies, nodemon as devDependency; start and dev scripts must run src/app.js because no server.js or src/index.js is generated",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\package.json"
+  },
+  "src/app.js": {
+    "purpose": "Express application setup and middleware - imports config, MongoDB database, error handler, and routes/index.js at /api; starts the server with app.listen; imports auth middleware and mounts auth routes before protected module routes",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\app.js"
+  },
+  "src/config/database.js": {
+    "purpose": "Database connection setup - exports a mongoose connection helper for MongoDB",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\config\\database.js"
+  },
+  "src/config/index.js": {
+    "purpose": "Configuration loader",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\config\\index.js"
+  },
+  "src/middleware/auth.js": {
+    "purpose": "Authentication middleware - verifies JWT from Authorization header and adds req.user",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\middleware\\auth.js"
+  },
+  "src/middleware/errorHandler.js": {
+    "purpose": "Global error handler",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\middleware\\errorHandler.js"
+  },
+  "src/models/inventory.js": {
+    "purpose": "inventory data model - defines and exports a Mongoose schema/model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\models\\inventory.js"
+  },
+  "src/models/posts.js": {
+    "purpose": "posts data model - defines and exports a Mongoose schema/model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\models\\posts.js"
+  },
+  "index.html": {
+    "purpose": "HTML entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\index.html"
+  },
+  "package_frontend.json": {
+    "purpose": "Frontend dependencies and scripts \u00e2\u20ac\u201d must include react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\package_frontend.json"
+  },
+  "src/App.css": {
+    "purpose": "Global application styles",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\App.css"
+  },
+  "src/App.jsx": {
+    "purpose": "Root application component with routing",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\App.jsx"
+  },
+  "src/main.jsx": {
+    "purpose": "React entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\main.jsx"
+  },
+  "src/pages/Dashboard.jsx": {
+    "purpose": "Dashboard page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\pages\\Dashboard.jsx"
+  },
+  "src/pages/Inventory.jsx": {
+    "purpose": "Inventory page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\pages\\Inventory.jsx"
+  },
+  "src/pages/Posts.jsx": {
+    "purpose": "Posts page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\pages\\Posts.jsx"
+  },
+  "src/services/api.js": {
+    "purpose": "API client configuration using axios \u00e2\u20ac\u201d uses import.meta.env.VITE_API_BASE_URL (Vite convention, not process.env)",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\services\\api.js"
+  },
+  "vite.config.js": {
+    "purpose": "Vite build configuration",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\vite.config.js"
+  },
+  "src/models/roles.js": {
+    "purpose": "roles data model - defines and exports a Mongoose schema/model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\models\\roles.js"
+  },
+  "src/models/users.js": {
+    "purpose": "User data model for authentication - defines and exports a Mongoose schema/model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\models\\users.js"
+  },
+  "src/routes/auth.js": {
+    "purpose": "Authentication routes (login, register, logout) - uses Mongoose user model, bcrypt for passwords, jwt for tokens",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\routes\\auth.js"
+  },
+  "src/routes/index.js": {
+    "purpose": "Route aggregator - imports and mounts exactly the route files listed in depends_on",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\routes\\index.js"
+  },
+  "src/routes/inventory.js": {
+    "purpose": "inventory API routes - uses the inventory model with Mongoose document operations",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\routes\\inventory.js"
+  },
+  "src/routes/posts.js": {
+    "purpose": "posts API routes - uses the posts model with Mongoose document operations",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\routes\\posts.js"
+  },
+  "src/routes/roles.js": {
+    "purpose": "roles API routes - uses the roles model with Mongoose document operations",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\three_projects\\p1_express_react_mongo_jwt\\src\\routes\\roles.js"
+  }
+}

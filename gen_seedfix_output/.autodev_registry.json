@@ -1,0 +1,117 @@
+{
+  "README.md": {
+    "purpose": "Project overview and setup instructions",
+    "type": "documentation",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\README.md"
+  },
+  "seeds/seed.js": {
+    "purpose": "MongoDB seed data script for development",
+    "type": "database",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\seeds\\seed.js"
+  },
+  ".env": {
+    "purpose": "Environment variables",
+    "type": "env",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\.env"
+  },
+  ".gitignore": {
+    "purpose": "Git ignore rules",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\.gitignore"
+  },
+  "package.json": {
+    "purpose": "Node.js dependencies and scripts - must include express, mongoose, dotenv, cors as dependencies, nodemon as devDependency; start and dev scripts must run src/app.js because no server.js or src/index.js is generated",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\package.json"
+  },
+  "src/app.js": {
+    "purpose": "Express application setup and middleware - imports config, MongoDB database, error handler, and routes/index.js at /api; starts the server with app.listen; has no authentication middleware or authentication dependencies",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\app.js"
+  },
+  "src/config/database.js": {
+    "purpose": "Database connection setup - exports a mongoose connection helper for MongoDB",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\config\\database.js"
+  },
+  "src/config/index.js": {
+    "purpose": "Configuration loader",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\config\\index.js"
+  },
+  "src/middleware/errorHandler.js": {
+    "purpose": "Global error handler",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\middleware\\errorHandler.js"
+  },
+  "src/models/inventory.js": {
+    "purpose": "inventory data model - defines and exports a Mongoose schema/model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\models\\inventory.js"
+  },
+  "src/models/posts.js": {
+    "purpose": "posts data model - defines and exports a Mongoose schema/model",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\models\\posts.js"
+  },
+  "src/routes/index.js": {
+    "purpose": "Route aggregator - imports and mounts exactly the route files listed in depends_on",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\routes\\index.js"
+  },
+  "src/routes/inventory.js": {
+    "purpose": "inventory API routes - uses the inventory model with Mongoose document operations",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\routes\\inventory.js"
+  },
+  "src/routes/posts.js": {
+    "purpose": "posts API routes - uses the posts model with Mongoose document operations",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\routes\\posts.js"
+  },
+  "index.html": {
+    "purpose": "HTML entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\index.html"
+  },
+  "package_frontend.json": {
+    "purpose": "Frontend dependencies and scripts \u00e2\u20ac\u201d must include react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\package_frontend.json"
+  },
+  "src/App.css": {
+    "purpose": "Global application styles",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\App.css"
+  },
+  "src/App.jsx": {
+    "purpose": "Root application component with routing",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\App.jsx"
+  },
+  "src/main.jsx": {
+    "purpose": "React entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\main.jsx"
+  },
+  "src/pages/Dashboard.jsx": {
+    "purpose": "Dashboard page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\pages\\Dashboard.jsx"
+  },
+  "src/pages/Posts.jsx": {
+    "purpose": "Posts page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\pages\\Posts.jsx"
+  },
+  "src/services/api.js": {
+    "purpose": "API client configuration using axios \u00e2\u20ac\u201d uses import.meta.env.VITE_API_BASE_URL (Vite convention, not process.env)",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\src\\services\\api.js"
+  },
+  "vite.config.js": {
+    "purpose": "Vite build configuration",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\gen_seedfix_output\\vite.config.js"
+  }
+}
