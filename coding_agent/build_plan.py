@@ -37,7 +37,7 @@ def generate_build_plan(project_rules: dict) -> dict:
     files.extend(_get_backend_files(backend_fw, database, modules, auth_method))
 
     # 3. Frontend files
-    files.extend(_get_frontend_files(frontend_fw, pages))
+    files.extend(_get_frontend_files(frontend_fw, pages, modules, auth_method))
 
     # 4. Database files
     files.extend(_get_database_files(database, backend_fw, modules, auth_method))
@@ -74,10 +74,11 @@ def _model_name(stem: str) -> str:
 
 def _infer_provides(path: str, ftype: str, database: str = "", backend_fw: str = "") -> List[str]:
     _never_imported = {
-        ".gitignore", ".env", "package.json", "package_frontend.json",
-        "vite.config.js", "index.html", "postcss.config.js",
+        "backend/.gitignore", "backend/.env", "backend/package.json",
+        "frontend/package.json", "frontend/.env", "frontend/vite.config.js",
+        "frontend/index.html", "postcss.config.js",
         "requirements.txt", "pom.xml", "README.md",
-        "src/main.jsx", "src/main.js",
+        "frontend/src/main.jsx", "frontend/src/main.js",
     }
     if path in _never_imported:
         return []
@@ -104,27 +105,27 @@ def _infer_provides(path: str, ftype: str, database: str = "", backend_fw: str =
 
     if ftype == "page":
         return [_pascal_case(stem)]
-    if path == "src/App.jsx" or path == "src/App.vue":
+    if path == "frontend/src/App.jsx" or path == "frontend/src/App.vue":
         return ["App"]
-    if path == "src/services/api.js":
+    if path == "frontend/src/services/api.js":
         return ["api"]
-    if path.startswith("src/pages/") or path.startswith("src/views/"):
+    if path.startswith("frontend/src/pages/") or path.startswith("frontend/src/views/"):
         return [_pascal_case(stem)]
-    if path == "src/router/index.js":
+    if path == "frontend/src/router/index.js":
         return ["router"]
 
     if is_node:
-        if path == "src/config/database.js":
+        if path == "backend/src/config/database.js":
             return ["connectDB"] if db_kind == "mongo" else ["pool"]
-        if path == "src/app.js":
+        if path == "backend/src/app.js":
             return ["app"]
-        if path.startswith("src/models/"):
+        if path.startswith("backend/src/models/"):
             return [_model_name(stem)]
-        if path.startswith("src/routes/"):
+        if path.startswith("backend/src/routes/"):
             return ["router"]
-        if path == "src/middleware/auth.js":
+        if path == "backend/src/middleware/auth.js":
             return ["authenticateToken"]
-        if path == "src/middleware/errorHandler.js":
+        if path == "backend/src/middleware/errorHandler.js":
             return ["errorHandler"]
 
     if is_python:
@@ -147,9 +148,6 @@ def _infer_provides(path: str, ftype: str, database: str = "", backend_fw: str =
         if path.startswith("app/services/"):
             return [_model_name(stem)]
 
-    if path == "src/app.js":
-        return ["app"]
-
     return []
 
 
@@ -170,14 +168,10 @@ def _infer_bundle(blueprint: dict) -> str:
         return "frontend"
     if "frontend" in purpose.lower() or "react" in purpose.lower() or "vue" in purpose.lower():
         return "frontend"
-    if path.startswith("src/pages/") or path.startswith("src/views/"):
+    if path.startswith("frontend/"):
         return "frontend"
-    if path in ("vite.config.js", "index.html", "postcss.config.js", "src/main.jsx", "src/main.js",
-                 "src/App.jsx", "src/App.vue", "src/App.css", "src/router/index.js",
-                 "package_frontend.json"):
-        return "frontend"
-    if "services/api" in path:
-        return "frontend"
+    if path.startswith("backend/"):
+        return "backend"
     return "backend"
 
 
@@ -211,6 +205,53 @@ def _get_backend_files(backend_fw: str, database: str, modules: List[str], auth_
     return _generic_backend_files(modules, auth_method)
 
 
+def _build_route_spec(module: str, db_kind: str, auth_enabled: bool) -> dict:
+    is_mongo = db_kind == "mongo"
+    model_name = _model_name(module)
+    operations = (
+        ["find", "findById", "create", "findByIdAndUpdate", "findByIdAndDelete"]
+        if is_mongo
+        else ["query", "queryById", "insert", "updateById", "deleteById"]
+    )
+    endpoints = [
+        {"method": "GET", "path": "/stats", "auth": auth_enabled,
+         "description": "Return count of total documents"},
+        {"method": "GET", "path": "/", "auth": auth_enabled,
+         "description": "Return all documents"},
+        {"method": "GET", "path": "/:id", "auth": auth_enabled,
+         "description": "Return single document by id or 404"},
+        {"method": "POST", "path": "/", "auth": auth_enabled,
+         "description": "Create and return new document with 201"},
+        {"method": "PUT", "path": "/:id", "auth": auth_enabled,
+         "description": "Update by id, return updated document"},
+        {"method": "DELETE", "path": "/:id", "auth": auth_enabled,
+         "description": "Delete by id, return 204"},
+    ]
+    if module == "calculator":
+        endpoints.append(
+            {"method": "POST", "path": "/evaluate", "auth": False,
+             "description": "evaluate math expression, return { result: number }"}
+        )
+
+    middleware = []
+    if auth_enabled:
+        middleware.append({
+            "name": "authenticateToken",
+            "path": "../middleware/auth",
+            "apply": "router.use(authenticateToken)",
+        })
+    return {
+        "endpoints": endpoints,
+        "middleware": middleware,
+        "model": {
+            "name": model_name,
+            "path": f"../models/{module}",
+            "operations": operations,
+        },
+        "populate": {},
+    }
+
+
 def _node_backend_files(modules: List[str], database: str, auth_method: str = "") -> List[Dict[str, str]]:
     auth_enabled = _auth_is_meaningful(auth_method)
     db_kind = _db_kind(database)
@@ -218,7 +259,7 @@ def _node_backend_files(modules: List[str], database: str, auth_method: str = ""
     db_dependency = "mongoose" if db_kind == "mongo" else "pg" if db_kind == "sql" else "database client"
     auth_dependencies = ", jsonwebtoken, bcrypt" if auth_enabled else ""
     auth_note = (
-        "imports auth middleware and mounts auth routes before protected module routes"
+        "mounts public auth routes before protected module routes; auth middleware is applied per-router in route files, not globally in app.js"
         if auth_enabled
         else "has no authentication middleware or authentication dependencies"
     )
@@ -248,48 +289,71 @@ def _node_backend_files(modules: List[str], database: str, auth_method: str = ""
     for module in modules:
         if auth_enabled and module == "auth":
             continue
-        route_index_deps.append(f"src/routes/{module}.js")
+        route_index_deps.append(f"backend/src/routes/{module}.js")
 
-    app_deps = ["src/config/index.js", "src/config/database.js", "src/middleware/errorHandler.js", "src/routes/index.js"]
+    app_deps = ["backend/src/config/index.js", "backend/src/config/database.js", "backend/src/middleware/errorHandler.js", "backend/src/routes/index.js"]
     if auth_enabled:
-        app_deps.insert(2, "src/routes/auth.js")
-        app_deps.insert(3, "src/middleware/auth.js")
+        app_deps.insert(2, "backend/src/routes/auth.js")
+        app_deps.insert(3, "backend/src/middleware/auth.js")
 
     files = [
-        {"path": ".gitignore", "type": "config", "purpose": "Git ignore rules", "depends_on": [], "provides": [], "requirements": []},
-        {"path": ".env", "type": "env", "purpose": "Environment variables", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "package.json", "type": "config", "purpose": f"Node.js dependencies and scripts - must include express, {db_dependency}, dotenv, cors{auth_dependencies} as dependencies, nodemon as devDependency; start and dev scripts must run src/app.js because no server.js or src/index.js is generated", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "src/app.js", "type": "source", "purpose": f"Express application setup and middleware - imports config, {db_label} database, error handler, and routes/index.js at /api; starts the server with app.listen; {auth_note}", "depends_on": app_deps, "provides": [], "requirements": ["middleware setup", "route mounting", "server start"]},
-        {"path": "src/config/index.js", "type": "config", "purpose": "Configuration loader", "depends_on": [], "provides": [], "requirements": ["configuration export"]},
-        {"path": "src/config/database.js", "type": "config", "purpose": db_purpose, "depends_on": [], "provides": [], "requirements": ["database connection"]},
-        {"path": "src/middleware/errorHandler.js", "type": "source", "purpose": "Global error handler", "depends_on": [], "provides": [], "requirements": ["error handling"]},
-        {"path": "src/routes/index.js", "type": "source", "purpose": "Route aggregator - imports and mounts exactly the route files listed in depends_on", "depends_on": route_index_deps, "provides": [], "requirements": ["route aggregation"]},
+        {"path": "backend/.gitignore", "type": "config", "purpose": "Git ignore rules", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "backend/.env", "type": "env", "purpose": "Environment variables", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "backend/package.json", "type": "config", "purpose": f"Node.js dependencies and scripts - must include express, {db_dependency}, dotenv, cors{auth_dependencies} as dependencies, nodemon as devDependency; start and dev scripts must run backend/src/app.js because no server.js or src/index.js is generated", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "backend/src/app.js", "type": "source", "purpose": f"Express application setup and middleware - imports config, {db_label} database, error handler, and routes/index.js at /api; starts the server with app.listen; {auth_note}", "depends_on": app_deps, "provides": [], "requirements": ["middleware setup", "route mounting", "server start"]},
+        {"path": "backend/src/config/index.js", "type": "config", "purpose": "Configuration loader", "depends_on": [], "provides": [], "requirements": ["configuration export"]},
+        {"path": "backend/src/config/database.js", "type": "config", "purpose": db_purpose, "depends_on": [], "provides": [], "requirements": ["database connection"]},
+        {"path": "backend/src/middleware/errorHandler.js", "type": "source", "purpose": "Global error handler", "depends_on": [], "provides": [], "requirements": ["error handling"]},
+        {"path": "backend/src/routes/index.js", "type": "source", "purpose": "Route aggregator - imports and mounts exactly the route files listed in depends_on",
+         "spec": {"mounts": [{"path": f"/{m}", "router": f"./{m}"} for m in modules if not (auth_enabled and m == "auth")]},
+         "depends_on": route_index_deps, "provides": [], "requirements": ["route aggregation"]},
     ]
 
     if auth_enabled:
         files.append({
-            "path": "src/middleware/auth.js",
+            "path": "backend/src/middleware/auth.js",
             "type": "source",
             "purpose": "Authentication middleware - verifies JWT from Authorization header and adds req.user",
-            "depends_on": ["src/config/database.js"],
+            "spec": {
+                "jwt_payload": {"id": "user._id", "email": "user.email"},
+                "req_user_assignment": "req.user = decoded",
+            },
+            "depends_on": ["backend/src/config/database.js"],
             "provides": [],
             "requirements": ["JWT verification", "token validation"],
         })
+        auth_ops = ["findOne", "create"] if db_kind == "mongo" else ["query", "insert"]
         files.append({
-            "path": "src/routes/auth.js",
+            "path": "backend/src/routes/auth.js",
             "type": "source",
             "purpose": (
                 "Authentication routes (login, register, logout) - uses Mongoose user model, bcrypt for passwords, jwt for tokens"
                 if db_kind == "mongo"
                 else "Authentication routes (login, register, logout) - uses pg.Pool user model, bcrypt for passwords, jwt for tokens"
             ),
-            "depends_on": ["src/config/database.js", "src/models/users.js"],
+            "spec": {
+                "endpoints": [
+                    {"method": "POST", "path": "/register", "auth": False,
+                     "description": "Register a new user, return JWT token with 201"},
+                    {"method": "POST", "path": "/login", "auth": False,
+                     "description": "Authenticate user by email and password, return JWT token"},
+                    {"method": "POST", "path": "/logout", "auth": False,
+                     "description": "Logout (client-side token removal)"},
+                ],
+                "middleware": [],
+                "model": {
+                    "name": "User",
+                    "path": "../models/users",
+                    "operations": auth_ops,
+                },
+                "populate": {},
+            },
+            "depends_on": ["backend/src/config/database.js", "backend/src/models/users.js"],
             "provides": [],
-            "requirements": ["login", "register", "logout"],
         })
         if "users" not in modules:
             files.append({
-                "path": "src/models/users.js",
+                "path": "backend/src/models/users.js",
                 "type": "module",
                 "purpose": (
                     "User data model for authentication - defines and exports a Mongoose schema/model"
@@ -304,16 +368,19 @@ def _node_backend_files(modules: List[str], database: str, auth_method: str = ""
     for module in modules:
         if auth_enabled and module == "auth":
             continue
+        route_deps = ["backend/src/config/database.js", f"backend/src/models/{module}.js"]
+        if auth_enabled:
+            route_deps.insert(0, "backend/src/middleware/auth.js")
         files.append({
-            "path": f"src/routes/{module}.js",
+            "path": f"backend/src/routes/{module}.js",
             "type": "module",
             "purpose": route_purpose.format(module=module),
-            "depends_on": [f"src/models/{module}.js"],
+            "spec": _build_route_spec(module, db_kind, auth_enabled),
+            "depends_on": route_deps,
             "provides": [],
-            "requirements": ["list", "create", "update", "delete"],
         })
         files.append({
-            "path": f"src/models/{module}.js",
+            "path": f"backend/src/models/{module}.js",
             "type": "module",
             "purpose": model_purpose.format(module=module),
             "depends_on": [],
@@ -489,14 +556,14 @@ def _java_backend_files(modules: List[str], auth_method: str = "") -> List[Dict[
 
 def _generic_backend_files(modules: List[str], auth_method: str = "") -> List[Dict[str, str]]:
     files = [
-        {"path": ".gitignore", "type": "config", "purpose": "Git ignore rules", "depends_on": [], "provides": [], "requirements": []},
-        {"path": ".env", "type": "env", "purpose": "Environment variables", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "src/app.js", "type": "source", "purpose": "Application entry point", "depends_on": ["src/config/index.js"], "provides": [], "requirements": ["application setup"]},
-        {"path": "src/config/index.js", "type": "config", "purpose": "Configuration loader", "depends_on": [], "provides": [], "requirements": ["configuration export"]},
+        {"path": "backend/.gitignore", "type": "config", "purpose": "Git ignore rules", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "backend/.env", "type": "env", "purpose": "Environment variables", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "backend/src/app.js", "type": "source", "purpose": "Application entry point", "depends_on": ["backend/src/config/index.js"], "provides": [], "requirements": ["application setup"]},
+        {"path": "backend/src/config/index.js", "type": "config", "purpose": "Configuration loader", "depends_on": [], "provides": [], "requirements": ["configuration export"]},
     ]
     if _auth_is_meaningful(auth_method):
         files.append({
-            "path": "src/routes/auth.js",
+            "path": "backend/src/routes/auth.js",
             "type": "source",
             "purpose": "Authentication routes (login, register, logout)",
             "depends_on": [],
@@ -505,7 +572,7 @@ def _generic_backend_files(modules: List[str], auth_method: str = "") -> List[Di
         })
     for module in modules:
         files.append({
-            "path": f"src/{module}/index.js",
+            "path": f"backend/src/{module}/index.js",
             "type": "module",
             "purpose": f"{module} module entry",
             "depends_on": [],
@@ -520,59 +587,94 @@ def _generic_backend_files(modules: List[str], auth_method: str = "") -> List[Di
 # ---------------------------------------------------------------------------
 
 
-def _get_frontend_files(frontend_fw: str, pages: List[str]) -> List[Dict[str, str]]:
+def _get_frontend_files(frontend_fw: str, pages: List[str], modules: List[str], auth_method: str) -> List[Dict[str, str]]:
     pages = _dedup(pages)
     if "react" in frontend_fw or "next" in frontend_fw:
-        return _react_frontend_files(pages)
+        return _react_frontend_files(pages, modules, auth_method)
     if "vue" in frontend_fw:
         return _vue_frontend_files(pages)
     return _generic_frontend_files(pages)
 
 
-def _react_frontend_files(pages: List[str]) -> List[Dict[str, str]]:
-    page_paths = [f"src/pages/{_sanitize_page_name(p)}.jsx" for p in pages]
+def _build_page_api_calls(page_name: str, modules: List[str], auth_method: str) -> List[dict]:
+    """Build api_calls spec for a frontend page blueprint."""
+    page_lower = page_name.lower().strip()
+
+    if page_lower == "login":
+        return [
+            {"method": "POST", "endpoint": "/auth/login", "body": ["email", "password"]},
+        ]
+    if page_lower == "register":
+        return [
+            {"method": "POST", "endpoint": "/auth/register", "body": ["email", "password", "name"]},
+        ]
+    if page_lower == "dashboard":
+        return [
+            {"method": "GET", "endpoint": f"/{m}/stats"} for m in modules
+        ]
+
+    for m in modules:
+        if m.lower() == page_lower:
+            return [
+                {"method": "GET", "endpoint": f"/{m}"},
+                {"method": "POST", "endpoint": f"/{m}"},
+                {"method": "PUT", "endpoint": f"/{m}/:id"},
+                {"method": "DELETE", "endpoint": f"/{m}/:id"},
+            ]
+
+    return []
+
+
+def _react_frontend_files(pages: List[str], modules: List[str], auth_method: str) -> List[Dict[str, str]]:
+    page_paths = [f"frontend/src/pages/{_sanitize_page_name(p)}.jsx" for p in pages]
 
     files = [
-        {"path": "package_frontend.json", "type": "config", "purpose": "Frontend dependencies and scripts â€” must include react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "vite.config.js", "type": "config", "purpose": "Vite build configuration", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "index.html", "type": "source", "purpose": "HTML entry point", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "src/main.jsx", "type": "source", "purpose": "React entry point", "depends_on": ["src/App.jsx"], "provides": [], "requirements": ["app rendering"]},
-        {"path": "src/App.jsx", "type": "source", "purpose": "Root application component with routing", "depends_on": page_paths, "provides": [], "requirements": ["component export", "route configuration"]},
-        {"path": "src/App.css", "type": "source", "purpose": "Global application styles", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "src/services/api.js", "type": "source", "purpose": "API client configuration using axios â€” uses import.meta.env.VITE_API_BASE_URL (Vite convention, not process.env)", "depends_on": [], "provides": [], "requirements": ["import axios"]},
+        {"path": "frontend/package.json", "type": "config", "purpose": "Frontend dependencies and scripts â€” must include react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/.env", "type": "env", "purpose": "Frontend environment variables - must define VITE_API_BASE_URL=http://localhost:5000/api", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/vite.config.js", "type": "config", "purpose": "Vite build configuration", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/index.html", "type": "source", "purpose": "HTML entry point", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/src/main.jsx", "type": "source", "purpose": "React entry point", "depends_on": ["frontend/src/App.jsx"], "provides": [], "requirements": ["app rendering"]},
+        {"path": "frontend/src/App.jsx", "type": "source", "purpose": "Root application component with routing", "depends_on": page_paths, "provides": [], "requirements": ["component export", "route configuration"]},
+        {"path": "frontend/src/App.css", "type": "source", "purpose": "Global application styles", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/src/services/api.js", "type": "source", "purpose": "API client configuration using axios â€” uses import.meta.env.VITE_API_BASE_URL (Vite convention, not process.env)", "depends_on": [], "provides": [], "requirements": ["import axios"]},
     ]
     for page in pages:
         safe = _sanitize_page_name(page)
-        files.append({
-            "path": f"src/pages/{safe}.jsx",
+        api_calls = _build_page_api_calls(page, modules, auth_method)
+        bp = {
+            "path": f"frontend/src/pages/{safe}.jsx",
             "type": "page",
             "purpose": f"{page} page",
-            "depends_on": ["src/services/api.js"],
+            "depends_on": ["frontend/src/services/api.js"],
             "provides": [],
             "requirements": ["component export"],
-        })
+        }
+        if api_calls:
+            bp["spec"] = {"api_calls": api_calls}
+        files.append(bp)
     return files
 
 
 def _vue_frontend_files(pages: List[str]) -> List[Dict[str, str]]:
-    view_paths = [f"src/views/{_sanitize_page_name(p)}.vue" for p in pages]
+    view_paths = [f"frontend/src/views/{_sanitize_page_name(p)}.vue" for p in pages]
 
     files = [
-        {"path": "package_frontend.json", "type": "config", "purpose": "Frontend dependencies and scripts", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "vite.config.js", "type": "config", "purpose": "Vite build configuration", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "index.html", "type": "source", "purpose": "HTML entry point", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "src/main.js", "type": "source", "purpose": "Vue entry point", "depends_on": ["src/App.vue"], "provides": [], "requirements": ["app mounting"]},
-        {"path": "src/App.vue", "type": "source", "purpose": "Root application component", "depends_on": ["src/router/index.js"], "provides": [], "requirements": ["component export"]},
-        {"path": "src/router/index.js", "type": "source", "purpose": "Vue Router configuration", "depends_on": view_paths, "provides": [], "requirements": ["route configuration"]},
-        {"path": "src/services/api.js", "type": "source", "purpose": "API client configuration using axios â€” uses import.meta.env.VITE_API_BASE_URL", "depends_on": [], "provides": [], "requirements": ["import axios"]},
+        {"path": "frontend/package.json", "type": "config", "purpose": "Frontend dependencies and scripts", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/.env", "type": "env", "purpose": "Frontend environment variables - must define VITE_API_BASE_URL=http://localhost:5000/api", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/vite.config.js", "type": "config", "purpose": "Vite build configuration", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/index.html", "type": "source", "purpose": "HTML entry point", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/src/main.js", "type": "source", "purpose": "Vue entry point", "depends_on": ["frontend/src/App.vue"], "provides": [], "requirements": ["app mounting"]},
+        {"path": "frontend/src/App.vue", "type": "source", "purpose": "Root application component", "depends_on": ["frontend/src/router/index.js"], "provides": [], "requirements": ["component export"]},
+        {"path": "frontend/src/router/index.js", "type": "source", "purpose": "Vue Router configuration", "depends_on": view_paths, "provides": [], "requirements": ["route configuration"]},
+        {"path": "frontend/src/services/api.js", "type": "source", "purpose": "API client configuration using axios â€” uses import.meta.env.VITE_API_BASE_URL", "depends_on": [], "provides": [], "requirements": ["import axios"]},
     ]
     for page in pages:
         safe = _sanitize_page_name(page)
         files.append({
-            "path": f"src/views/{safe}.vue",
+            "path": f"frontend/src/views/{safe}.vue",
             "type": "page",
             "purpose": f"{page} page view",
-            "depends_on": ["src/services/api.js"],
+            "depends_on": ["frontend/src/services/api.js"],
             "provides": [],
             "requirements": ["component export"],
         })
@@ -580,17 +682,17 @@ def _vue_frontend_files(pages: List[str]) -> List[Dict[str, str]]:
 
 
 def _generic_frontend_files(pages: List[str]) -> List[Dict[str, str]]:
-    page_paths = [f"src/pages/{_sanitize_page_name(p)}.js" for p in pages]
+    page_paths = [f"frontend/src/pages/{_sanitize_page_name(p)}.js" for p in pages]
 
     files = [
-        {"path": "package_frontend.json", "type": "config", "purpose": "Frontend dependencies and scripts", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "index.html", "type": "source", "purpose": "HTML entry point", "depends_on": [], "provides": [], "requirements": []},
-        {"path": "src/main.js", "type": "source", "purpose": "Application entry point", "depends_on": page_paths, "provides": [], "requirements": ["app rendering"]},
+        {"path": "frontend/package.json", "type": "config", "purpose": "Frontend dependencies and scripts", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/index.html", "type": "source", "purpose": "HTML entry point", "depends_on": [], "provides": [], "requirements": []},
+        {"path": "frontend/src/main.js", "type": "source", "purpose": "Application entry point", "depends_on": page_paths, "provides": [], "requirements": ["app rendering"]},
     ]
     for page in pages:
         safe = _sanitize_page_name(page)
         files.append({
-            "path": f"src/pages/{safe}.js",
+            "path": f"frontend/src/pages/{safe}.js",
             "type": "page",
             "purpose": f"{page} page",
             "depends_on": [],
@@ -634,13 +736,13 @@ def _get_database_files(database: str, backend_fw: str = "", modules: List[str] 
         })
     elif db_kind == "mongo":
         seed_path = "seeds/seed.py" if "fastapi" in backend_val or "python" in backend_val else "seeds/seed.js"
-        db_dep = "app/db/database.py" if seed_path.endswith(".py") else "src/config/database.js"
+        db_dep = "app/db/database.py" if seed_path.endswith(".py") else "backend/src/config/database.js"
         depends_on = [db_dep]
         model_deps = []
         if _auth_is_meaningful(auth_method):
-            model_deps.append("app/models/user.py" if seed_path.endswith(".py") else "src/models/users.js")
+            model_deps.append("app/models/user.py" if seed_path.endswith(".py") else "backend/src/models/users.js")
         for module in (modules or []):
-            model_deps.append(f"app/models/{module}.py" if seed_path.endswith(".py") else f"src/models/{module}.js")
+            model_deps.append(f"app/models/{module}.py" if seed_path.endswith(".py") else f"backend/src/models/{module}.js")
         depends_on.extend(_dedup(model_deps))
         files.append({
             "path": seed_path,

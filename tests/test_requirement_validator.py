@@ -137,6 +137,10 @@ class TestValidateRequirements:
 
     def test_api_service_exports_exist(self, tmp_project):
         content = """
+        import axios from 'axios';
+        const api = axios.create();
+        api.interceptors.request.use(config => config);
+        api.interceptors.response.use(response => response);
         export async function getUsers() {}
         export async function createUser() {}
         """

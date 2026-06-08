@@ -157,7 +157,7 @@ def _check_config_export(content: str, suffix: str, bp: dict) -> bool:
         if re.search(r"module\.exports\s*=|export\s+", content):
             return True
     if suffix == ".py":
-        if re.search(r"Settings|config|Config", content, re.IGNORECASE):
+        if re.search(r"(Settings|config|Config|BaseSettings|pydantic)", content, re.IGNORECASE):
             return True
     return False
 
@@ -245,6 +245,8 @@ def _check_model_definition(content: str, suffix: str, bp: dict) -> bool:
             re.IGNORECASE,
         ):
             return True
+        if re.search(r"(pool\.query|SELECT|INSERT\s+INTO|UPDATE\s+\w+|DELETE\s+FROM)", content, re.IGNORECASE):
+            return True
     if suffix == ".py":
         if re.search(r"(class\s+\w+|Column|Table|Model|Base)", content):
             return True
@@ -264,6 +266,9 @@ def _check_seed_data(content: str, suffix: str, bp: dict) -> bool:
             return True
     if suffix in (".js", ".jsx"):
         if re.search(r"(insert|seed|create|save)\s*\(", content, re.IGNORECASE):
+            return True
+    if suffix == ".py":
+        if re.search(r"(insert|seed|create|save|collection|\.insert_one|\.insert_many|\.create)", content, re.IGNORECASE):
             return True
     return False
 
@@ -313,6 +318,9 @@ def _check_application_setup(content: str, suffix: str, bp: dict) -> bool:
     if suffix in (".js", ".jsx"):
         if re.search(r"(express|app|require|import)", content):
             return True
+    if suffix == ".py":
+        if re.search(r"(FastAPI\(|FastAPI|include_router|uvicorn)", content):
+            return True
     return False
 
 
@@ -345,8 +353,11 @@ _STRUCTURAL_REQUIREMENTS: dict = {
     "server start": _check_server_start,
     "app startup": _check_server_start,
     "application startup": _check_server_start,
+    "app setup": _check_application_setup,
+    "application setup": _check_application_setup,
     "middleware setup": _check_middleware_setup,
     "route mounting": _check_route_mounting,
+    "router mounting": _check_route_mounting,
     "route aggregation": _check_route_aggregation,
     "route configuration": _check_route_configuration,
     "configuration export": _check_config_export,
@@ -461,6 +472,123 @@ def _derive_requirements_from_purpose(purpose: str) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
+def validate_spec_compliance(content: str, blueprint: dict) -> List[dict]:
+    """Check generated file content against blueprint spec contract.
+
+    When a blueprint has a ``spec`` field, verifies the generated code
+    implements every requirement encoded in the spec. Returns a list of
+    error dicts (empty when compliant).
+    """
+    errors: List[dict] = []
+    spec = blueprint.get("spec")
+    if not spec:
+        return errors
+
+    file_path = blueprint.get("path", "unknown")
+
+    # Only check endpoint-based specs, not mount-based (index.js) specs
+    if "mounts" in spec:
+        return errors
+
+    endpoints = spec.get("endpoints", [])
+    model = spec.get("model", {})
+    operations = model.get("operations", [])
+    middleware_list = spec.get("middleware", [])
+
+    endpoint_paths = {ep["path"] for ep in endpoints}
+    endpoint_methods = {(ep["method"], ep["path"]) for ep in endpoints}
+
+    # 1. Check GET /stats endpoint
+    if "/stats" in endpoint_paths:
+        if not re.search(r"""router\.get\s*\(\s*['"]/stats['"]""", content):
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": "Missing GET /stats route",
+            })
+
+    # 2. Check router.use(middleware_name) when middleware apply contains router.use
+    for mw in middleware_list:
+        apply_str = mw.get("apply", "")
+        if "router.use" in apply_str:
+            m = re.search(r"router\.use\((\w+)\)", apply_str)
+            if m:
+                mw_name = m.group(1)
+                if not re.search(rf"""router\.use\s*\(\s*{re.escape(mw_name)}\s*\)""", content):
+                    errors.append({
+                        "file": file_path,
+                        "requirement": "spec compliance",
+                        "error": f"Missing router.use({mw_name})",
+                    })
+
+    # 3. Check findByIdAndDelete — no .remove()
+    if "findByIdAndDelete" in operations:
+        if re.search(r"""\.remove\s*\(\s*\)""", content):
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": "Uses deprecated .remove() — use findByIdAndDelete",
+            })
+
+    # 4. Check findByIdAndUpdate is used
+    if "findByIdAndUpdate" in operations:
+        if not re.search(r"findByIdAndUpdate", content):
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": "Missing findByIdAndUpdate",
+            })
+
+    # 5. Check POST / returns 201
+    if ("POST", "/") in endpoint_methods:
+        if not re.search(r"status\s*\(\s*201\s*\)", content):
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": "POST route must return 201 status",
+            })
+
+    # 6. Check DELETE /:id returns 204
+    if ("DELETE", "/:id") in endpoint_methods:
+        if not re.search(r"status\s*\(\s*204\s*\)", content):
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": "DELETE route must return 204 status",
+            })
+
+    # 7. Check frontend api_calls — each endpoint must appear in the file
+    api_calls = spec.get("api_calls", [])
+    for call in api_calls:
+        endpoint = call.get("endpoint", "")
+        if "/:id" in endpoint:
+            continue
+        if endpoint and endpoint not in content:
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": f"Missing API call to {endpoint}",
+            })
+
+    # 8. Check middleware JWT decode assignment
+    req_user = spec.get("req_user_assignment")
+    if req_user:
+        if "req.user = decoded.user" in content:
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": "Wrong JWT decode assignment — use req.user = decoded not req.user = decoded.user",
+            })
+        elif req_user not in content:
+            errors.append({
+                "file": file_path,
+                "requirement": "spec compliance",
+                "error": "Wrong JWT decode assignment — use req.user = decoded not req.user = decoded.user",
+            })
+
+    return errors
+
+
 def validate_requirements(project_dir: str, build_plan: dict) -> dict:
     """Validate that generated files satisfy their blueprint requirements.
 
@@ -526,5 +654,50 @@ def validate_requirements(project_dir: str, build_plan: dict) -> dict:
                         "requirement": req,
                         "error": error,
                     })
+
+        # Spec compliance — check generated code against blueprint spec
+        spec_errors = validate_spec_compliance(content, bp)
+        errors.extend(spec_errors)
+
+        # Path-based compliance checks (regardless of spec presence)
+        file_ref = bp.get("path", "unknown")
+
+        if file_ref.endswith("models/users.js"):
+            if "bcrypt" not in content or "pre(" not in content:
+                errors.append({
+                    "file": file_ref,
+                    "requirement": "spec compliance",
+                    "error": "Missing bcrypt pre-save hook in User model",
+                })
+
+        if file_ref.endswith("src/app.js"):
+            if "connectDB().then(" not in content:
+                errors.append({
+                    "file": file_ref,
+                    "requirement": "spec compliance",
+                    "error": "connectDB() must use .then() before app.listen()",
+                })
+            if "app.use(authenticateToken)" in content:
+                errors.append({
+                    "file": file_ref,
+                    "requirement": "spec compliance",
+                    "error": "Auth middleware must not be global in app.js",
+                })
+
+        if file_ref.endswith("services/api.js"):
+            if "interceptors.request.use(" not in content or "interceptors.response.use(" not in content:
+                errors.append({
+                    "file": file_ref,
+                    "requirement": "spec compliance",
+                    "error": "Missing request/response interceptors in api.js",
+                })
+
+        if file_ref.endswith("App.jsx"):
+            if "PrivateRoute" not in content or "<a href" in content:
+                errors.append({
+                    "file": file_ref,
+                    "requirement": "spec compliance",
+                    "error": "Missing PrivateRoute or using <a> instead of <Link>",
+                })
 
     return {"success": len(errors) == 0, "errors": errors}

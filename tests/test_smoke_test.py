@@ -54,67 +54,67 @@ class TestRunSmokeTests:
         assert "not found" in errors[0]
 
     def test_node_backend_all_pass(self, tmp_project):
-        _write(tmp_project, "package.json", "{}")
-        _write(tmp_project, "src/app.js", "const x = 1;")
-        _write(tmp_project, "src/server.js", "const app = require('./app');\nconst x = 1;")
+        _write(tmp_project, "backend/package.json", "{}")
+        _write(tmp_project, "backend/src/app.js", "const x = 1;")
+        _write(tmp_project, "backend/src/server.js", "const app = require('./app');\nconst x = 1;")
         rules = {"backend_framework": "Express.js", "frontend_framework": "Unknown"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert errors == []
 
     def test_node_backend_missing_package_json(self, tmp_project):
-        _write(tmp_project, "src/app.js", "const x = 1;")
+        _write(tmp_project, "backend/src/app.js", "const x = 1;")
         rules = {"backend_framework": "Express.js", "frontend_framework": "Unknown"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert any("package.json not found" in e for e in errors)
 
     def test_node_backend_missing_import(self, tmp_project):
-        _write(tmp_project, "package.json", "{}")
-        _write(tmp_project, "src/app.js", "const missing = require('./nonexistent');")
+        _write(tmp_project, "backend/package.json", "{}")
+        _write(tmp_project, "backend/src/app.js", "const missing = require('./nonexistent');")
         rules = {"backend_framework": "Express.js", "frontend_framework": "Unknown"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert any("missing file" in e and "nonexistent" in e for e in errors)
 
     def test_react_frontend_all_pass(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "vite.config.js", "")
-        _write(tmp_project, "index.html", "<html></html>")
-        _write(tmp_project, "src/main.jsx", "import App from './App';\nconst x = 1;")
-        _write(tmp_project, "src/App.jsx", "export default function App() { return null; }")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/vite.config.js", "")
+        _write(tmp_project, "frontend/index.html", "<html></html>")
+        _write(tmp_project, "frontend/src/main.jsx", "import App from './App';\nconst x = 1;")
+        _write(tmp_project, "frontend/src/App.jsx", "export default function App() { return null; }")
         rules = {"backend_framework": "Unknown", "frontend_framework": "React"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert errors == []
 
     def test_react_frontend_missing_package(self, tmp_project):
-        _write(tmp_project, "vite.config.js", "")
-        _write(tmp_project, "index.html", "")
-        _write(tmp_project, "src/App.jsx", "")
+        _write(tmp_project, "frontend/vite.config.js", "")
+        _write(tmp_project, "frontend/index.html", "")
+        _write(tmp_project, "frontend/src/App.jsx", "")
         rules = {"backend_framework": "Unknown", "frontend_framework": "React"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert any("package_frontend.json not found" in e for e in errors)
 
     def test_react_frontend_missing_required_config(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "src/App.jsx", "")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/src/App.jsx", "")
         rules = {"backend_framework": "Unknown", "frontend_framework": "React"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert any("vite.config.js" in e for e in errors)
         assert any("index.html" in e for e in errors)
 
     def test_react_frontend_jsx_import_missing(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "vite.config.js", "")
-        _write(tmp_project, "index.html", "")
-        _write(tmp_project, "src/main.jsx", "import Missing from './Missing';")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/vite.config.js", "")
+        _write(tmp_project, "frontend/index.html", "")
+        _write(tmp_project, "frontend/src/main.jsx", "import Missing from './Missing';")
         rules = {"backend_framework": "Unknown", "frontend_framework": "React"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert any("missing file" in e and "Missing" in e for e in errors)
 
     def test_react_frontend_jsx_import_resolved(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "vite.config.js", "")
-        _write(tmp_project, "index.html", "")
-        _write(tmp_project, "src/main.jsx", "import App from './App';")
-        _write(tmp_project, "src/App.jsx", "export default function App() { return null; }")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/vite.config.js", "")
+        _write(tmp_project, "frontend/index.html", "")
+        _write(tmp_project, "frontend/src/main.jsx", "import App from './App';")
+        _write(tmp_project, "frontend/src/App.jsx", "export default function App() { return null; }")
         rules = {"backend_framework": "Unknown", "frontend_framework": "React"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert errors == []
@@ -143,14 +143,14 @@ class TestRunSmokeTests:
         assert any("requirements.txt not found" in e for e in errors)
 
     def test_vue_frontend_all_pass(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "src/App.vue", "<template><div>App</div></template>")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/src/App.vue", "<template><div>App</div></template>")
         rules = {"backend_framework": "Unknown", "frontend_framework": "Vue.js"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert errors == []
 
     def test_vue_frontend_missing_vue_files(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
+        _write(tmp_project, "frontend/package.json", "{}")
         rules = {"backend_framework": "Unknown", "frontend_framework": "Vue.js"}
         errors = run_smoke_tests(str(tmp_project), rules)
         assert any("No .vue files found" in e for e in errors)
@@ -174,38 +174,38 @@ class TestRunSmokeTests:
 
 class TestSmokeTestNode:
     def test_missing_package_json(self, tmp_project):
-        _write(tmp_project, "src/app.js", "const x = 1;")
+        _write(tmp_project, "backend/src/app.js", "const x = 1;")
         errors = _smoke_test_node(tmp_project)
         assert any("package.json not found" in e for e in errors)
 
     def test_no_js_files(self, tmp_project):
-        _write(tmp_project, "package.json", "{}")
+        _write(tmp_project, "backend/package.json", "{}")
         errors = _smoke_test_node(tmp_project)
         assert any("No .js files found" in e for e in errors)
 
     def test_missing_import_detected(self, tmp_project):
-        _write(tmp_project, "package.json", "{}")
-        _write(tmp_project, "src/app.js", "const x = require('./missing');")
+        _write(tmp_project, "backend/package.json", "{}")
+        _write(tmp_project, "backend/src/app.js", "const x = require('./missing');")
         errors = _smoke_test_node(tmp_project)
         assert any("missing file" in e and "missing" in e for e in errors)
 
     def test_valid_import_no_error(self, tmp_project):
-        _write(tmp_project, "package.json", "{}")
-        _write(tmp_project, "src/app.js", "const config = require('./config');")
-        _write(tmp_project, "src/config.js", "module.exports = {};")
+        _write(tmp_project, "backend/package.json", "{}")
+        _write(tmp_project, "backend/src/app.js", "const config = require('./config');")
+        _write(tmp_project, "backend/src/config.js", "module.exports = {};")
         errors = _smoke_test_node(tmp_project)
         assert errors == []
 
     def test_external_import_ignored(self, tmp_project):
-        _write(tmp_project, "package.json", "{}")
-        _write(tmp_project, "src/app.js", "const express = require('express');")
+        _write(tmp_project, "backend/package.json", "{}")
+        _write(tmp_project, "backend/src/app.js", "const express = require('express');")
         errors = _smoke_test_node(tmp_project)
         assert errors == []
 
     def test_node_modules_skipped(self, tmp_project):
-        _write(tmp_project, "package.json", "{}")
-        _write(tmp_project, "src/app.js", "const x = 1;")
-        _write(tmp_project, "node_modules/express/index.js", "module.exports = {};")
+        _write(tmp_project, "backend/package.json", "{}")
+        _write(tmp_project, "backend/src/app.js", "const x = 1;")
+        _write(tmp_project, "backend/node_modules/express/index.js", "module.exports = {};")
         errors = _smoke_test_node(tmp_project)
         assert errors == []
 
@@ -221,26 +221,26 @@ class TestSmokeTestReact:
         assert any("package_frontend.json not found" in e for e in errors)
 
     def test_missing_required_configs(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
+        _write(tmp_project, "frontend/package.json", "{}")
         errors = _smoke_test_react(tmp_project)
         assert any("vite.config.js" in e for e in errors)
         assert any("index.html" in e for e in errors)
 
     def test_jsx_import_resolved(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "vite.config.js", "")
-        _write(tmp_project, "index.html", "")
-        _write(tmp_project, "src/main.jsx", "import App from './App';\nconst x = 1;")
-        _write(tmp_project, "src/App.jsx", "export default function App() { return null; }")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/vite.config.js", "")
+        _write(tmp_project, "frontend/index.html", "")
+        _write(tmp_project, "frontend/src/main.jsx", "import App from './App';\nconst x = 1;")
+        _write(tmp_project, "frontend/src/App.jsx", "export default function App() { return null; }")
         errors = _smoke_test_react(tmp_project)
         assert errors == []
 
     def test_js_import_to_jsx_resolved(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "vite.config.js", "")
-        _write(tmp_project, "index.html", "")
-        _write(tmp_project, "src/main.js", "import App from './App';")
-        _write(tmp_project, "src/App.jsx", "export default function App() { return null; }")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/vite.config.js", "")
+        _write(tmp_project, "frontend/index.html", "")
+        _write(tmp_project, "frontend/src/main.js", "import App from './App';")
+        _write(tmp_project, "frontend/src/App.jsx", "export default function App() { return null; }")
         errors = _smoke_test_react(tmp_project)
         assert errors == []
 
@@ -296,18 +296,18 @@ class TestSmokeTestPython:
 
 class TestSmokeTestVue:
     def test_all_pass(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
-        _write(tmp_project, "src/App.vue", "<template><div>App</div></template>")
+        _write(tmp_project, "frontend/package.json", "{}")
+        _write(tmp_project, "frontend/src/App.vue", "<template><div>App</div></template>")
         errors = _smoke_test_vue(tmp_project)
         assert errors == []
 
     def test_missing_package(self, tmp_project):
-        _write(tmp_project, "src/App.vue", "")
+        _write(tmp_project, "frontend/src/App.vue", "")
         errors = _smoke_test_vue(tmp_project)
         assert any("package_frontend.json not found" in e for e in errors)
 
     def test_no_vue_files(self, tmp_project):
-        _write(tmp_project, "package_frontend.json", "{}")
+        _write(tmp_project, "frontend/package.json", "{}")
         errors = _smoke_test_vue(tmp_project)
         assert any("No .vue files found" in e for e in errors)
 
@@ -488,15 +488,15 @@ class TestGenerateProjectIntegration:
 
         build_plan = {
             "files": [
-                {"path": "package.json", "type": "config", "purpose": "Dependencies"},
-                {"path": "src/app.js", "type": "source", "purpose": "App entry", "depends_on": [], "provides": []},
+                {"path": "backend/package.json", "type": "config", "purpose": "Dependencies"},
+                {"path": "backend/src/app.js", "type": "source", "purpose": "App entry", "depends_on": [], "provides": []},
             ],
         }
         rules = {"backend_framework": "Express.js", "frontend_framework": "Unknown"}
 
         mock_llm = Mock(return_value=(
-            "===FILE: package.json===\n{}\n===END===\n"
-            "===FILE: src/app.js===\nconst x = 1;\n===END==="
+            "===FILE: backend/package.json===\n{}\n===END===\n"
+            "===FILE: backend/src/app.js===\nconst x = 1;\n===END==="
         ))
         mock_write = Mock(return_value={"path": "", "absolute_path": str(tmp_project / "x"), "bytes_written": 1})
 
@@ -511,15 +511,15 @@ class TestGenerateProjectIntegration:
 
         build_plan = {
             "files": [
-                {"path": "package.json", "type": "config", "purpose": "Dependencies"},
-                {"path": "src/app.js", "type": "source", "purpose": "App entry", "depends_on": [], "provides": []},
+                {"path": "backend/package.json", "type": "config", "purpose": "Dependencies"},
+                {"path": "backend/src/app.js", "type": "source", "purpose": "App entry", "depends_on": [], "provides": []},
             ],
         }
         rules = {"backend_framework": "Express.js", "frontend_framework": "Unknown"}
 
         mock_llm = Mock(return_value=(
-            "===FILE: package.json===\nnot-valid-json\n===END===\n"
-            "===FILE: src/app.js===\nconst x = require('./missing');\n===END==="
+            "===FILE: backend/package.json===\nnot-valid-json\n===END===\n"
+            "===FILE: backend/src/app.js===\nconst x = require('./missing');\n===END==="
         ))
         mock_write = Mock(return_value={"path": "", "absolute_path": str(tmp_project / "x"), "bytes_written": 1})
 

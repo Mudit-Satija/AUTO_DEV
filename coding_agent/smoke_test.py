@@ -164,12 +164,12 @@ def _smoke_test_node(root: Path) -> List[str]:
     errors: List[str] = []
 
     # 1. package.json must exist
-    pkg = root / "package.json"
+    pkg = root / "backend" / "package.json"
     if not pkg.is_file():
         errors.append("package.json not found")
     else:
         logger.info("  [PASS] package.json exists")
-        errors.extend(_check_package_script_entries(pkg, root))
+        errors.extend(_check_package_script_entries(pkg, pkg.parent))
 
     js_files = sorted(
         f for f in root.rglob("*.js") if "node_modules" not in f.parts
@@ -250,7 +250,7 @@ def _smoke_test_react(root: Path) -> List[str]:
     errors: List[str] = []
 
     # 1. package_frontend.json must exist
-    pkg = root / "package_frontend.json"
+    pkg = root / "frontend" / "package.json"
     if not pkg.is_file():
         errors.append("package_frontend.json not found")
     else:
@@ -258,7 +258,7 @@ def _smoke_test_react(root: Path) -> List[str]:
 
     # 2. Required config files
     for required in ("vite.config.js", "index.html"):
-        if not (root / required).is_file():
+        if not (root / "frontend" / required).is_file():
             errors.append(f"Required file not found: {required}")
 
     # 3. Collect all frontend source files
@@ -290,7 +290,7 @@ def _smoke_test_react(root: Path) -> List[str]:
 def _smoke_test_vue(root: Path) -> List[str]:
     errors: List[str] = []
 
-    pkg = root / "package_frontend.json"
+    pkg = root / "frontend" / "package.json"
     if not pkg.is_file():
         errors.append("package_frontend.json not found")
     else:

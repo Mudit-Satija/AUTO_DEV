@@ -69,7 +69,7 @@ def build_prompt_constraints(project_rules: dict, file_blueprints: Optional[List
         if "package.json" in paths:
             lines.append("- package.json scripts must use src/app.js for start/dev because server.js and src/index.js are not listed files.")
         lines.append("- Express route aggregation must import and mount exactly the module route files listed by depends_on; auth routes are mounted in app.js when listed there. Never hardcode workspaces, projects, tasks, users, products, or auth unless those files are listed.")
-        lines.append("- Express app.js must mount public auth routes before protected module routes when auth is enabled, apply auth middleware before module routes, mount routes/index.js under /api, call app.listen, and must not create a separate server.js unless server.js is listed.")
+        lines.append("- Express app.js must mount public auth routes before protected module routes when auth is enabled, mount routes/index.js under /api, call connectDB before app.listen for MongoDB, and must not create a separate server.js unless server.js is listed. Do NOT apply auth middleware globally in app.js — auth is applied per-router in route files.")
     if "fastapi" in backend_fw or "python" in backend_fw:
         lines.append("- FastAPI imports must use the app package paths that correspond to listed files; do not import routers, schemas, models, or services that are not listed.")
     if "react" in frontend_fw or "next" in frontend_fw:

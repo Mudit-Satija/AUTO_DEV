@@ -82,7 +82,11 @@ def _minimal_content(path, suffix, bp):
             if "app.js" in path or "app" in path.split("/")[-1]:
                 lines = ["const express = require('express');",
                          "const app = express();",
-                         "app.use(express.json());",
+                         "const connectDB = () => Promise.resolve();",
+                         "connectDB().then(() => {",
+                         "  app.use(express.json());",
+                         "  app.listen(5000);",
+                         "});",
                          "module.exports = app;"]
             elif "server.js" in path:
                 lines = ["const app = require('./app');",
@@ -208,9 +212,9 @@ def _run_with_mocks(build_plan, project_rules, output_dir, max_repair_attempts=3
 class TestE2EFullPipeline:
     def test_generates_all_files(self, tmp_dir):
         plan = {"files": [
-            {"path": "package.json", "type": "config", "purpose": "Deps",
+            {"path": "backend/package.json", "type": "config", "purpose": "Deps",
              "depends_on": [], "provides": [], "requirements": []},
-            {"path": "src/app.js", "type": "source", "purpose": "App",
+            {"path": "backend/src/app.js", "type": "source", "purpose": "App",
              "depends_on": [], "provides": [], "requirements": ["middleware setup"]},
             {"path": "README.md", "type": "documentation", "purpose": "Readme",
              "depends_on": [], "provides": [], "requirements": []},
@@ -223,7 +227,7 @@ class TestE2EFullPipeline:
 
     def test_files_on_disk(self, tmp_dir):
         plan = {"files": [
-            {"path": "package.json", "type": "config", "purpose": "Deps",
+            {"path": "backend/package.json", "type": "config", "purpose": "Deps",
              "depends_on": [], "provides": [], "requirements": []},
             {"path": "README.md", "type": "documentation", "purpose": "Readme",
              "depends_on": [], "provides": [], "requirements": []},
@@ -290,9 +294,9 @@ class TestE2ERepairLoop:
         """Auth route missing 'logout' — repair regenerates it."""
         plan = {
             "files": [
-                {"path": "package.json", "type": "config", "purpose": "Deps",
+                {"path": "backend/package.json", "type": "config", "purpose": "Deps",
                  "depends_on": [], "provides": [], "requirements": []},
-                {"path": "src/routes/auth.js", "type": "source",
+                {"path": "backend/src/routes/auth.js", "type": "source",
                  "purpose": "Authentication routes",
                  "depends_on": [], "provides": [],
                  "requirements": ["login", "register", "logout"]},
@@ -312,7 +316,7 @@ class TestE2ERepairLoop:
                 for bp in bps:
                     if "auth.js" in bp["path"]:
                         lines.append(
-                            "===FILE: src/routes/auth.js===\n"
+                            "===FILE: backend/src/routes/auth.js===\n"
                             "const router = require('express').Router();\n"
                             "router.post('/login', (req, res) => {});\n"
                             "router.post('/register', (req, res) => {});\n"

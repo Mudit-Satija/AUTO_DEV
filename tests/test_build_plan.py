@@ -10,45 +10,46 @@ def test_readme_always_included():
 def test_node_backend_core_files():
     plan = generate_build_plan(_node_react_postgres_rules())
     paths = [f["path"] for f in plan["files"]]
-    assert "package.json" in paths
-    assert "src/app.js" in paths
-    assert "src/config/index.js" in paths
-    assert "src/config/database.js" in paths
-    assert "src/middleware/auth.js" in paths
-    assert "src/middleware/errorHandler.js" in paths
-    assert "src/routes/index.js" in paths
+    assert "backend/package.json" in paths
+    assert "backend/src/app.js" in paths
+    assert "backend/src/config/index.js" in paths
+    assert "backend/src/config/database.js" in paths
+    assert "backend/src/middleware/auth.js" in paths
+    assert "backend/src/middleware/errorHandler.js" in paths
+    assert "backend/src/routes/index.js" in paths
 
 
 def test_node_backend_module_files():
     plan = generate_build_plan(_node_react_postgres_rules())
     paths = [f["path"] for f in plan["files"]]
-    assert "src/routes/workspaces.js" in paths
-    assert "src/models/workspaces.js" in paths
-    assert "src/routes/projects.js" in paths
-    assert "src/models/projects.js" in paths
-    assert "src/routes/tasks.js" in paths
-    assert "src/models/tasks.js" in paths
+    assert "backend/src/routes/workspaces.js" in paths
+    assert "backend/src/models/workspaces.js" in paths
+    assert "backend/src/routes/projects.js" in paths
+    assert "backend/src/models/projects.js" in paths
+    assert "backend/src/routes/tasks.js" in paths
+    assert "backend/src/models/tasks.js" in paths
 
 
 def test_react_frontend_core_files():
     plan = generate_build_plan(_node_react_postgres_rules())
     paths = [f["path"] for f in plan["files"]]
-    assert "package_frontend.json" in paths
-    assert "vite.config.js" in paths
-    assert "index.html" in paths
-    assert "src/main.jsx" in paths
-    assert "src/App.jsx" in paths
-    assert "src/App.css" in paths
-    assert "src/services/api.js" in paths
+    assert "frontend/package.json" in paths
+    assert "frontend/.env" in paths
+    assert "frontend/vite.config.js" in paths
+    assert "frontend/index.html" in paths
+    assert "frontend/src/main.jsx" in paths
+    assert "frontend/src/App.jsx" in paths
+    assert "frontend/src/App.css" in paths
+    assert "frontend/src/services/api.js" in paths
 
 
 def test_react_frontend_page_files():
     plan = generate_build_plan(_node_react_postgres_rules())
     paths = [f["path"] for f in plan["files"]]
-    assert "src/pages/Home.jsx" in paths
-    assert "src/pages/Login.jsx" in paths
-    assert "src/pages/Dashboard.jsx" in paths
-    assert "src/pages/Settings.jsx" in paths
+    assert "frontend/src/pages/Home.jsx" in paths
+    assert "frontend/src/pages/Login.jsx" in paths
+    assert "frontend/src/pages/Dashboard.jsx" in paths
+    assert "frontend/src/pages/Settings.jsx" in paths
 
 
 def test_postgres_database_files():
@@ -71,10 +72,10 @@ def test_empty_modules_and_pages():
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
     assert "README.md" in paths
-    assert "src/app.js" in paths
-    assert "src/main.jsx" in paths
+    assert "backend/src/app.js" in paths
+    assert "frontend/src/main.jsx" in paths
     assert "migrations/001_initial.sql" in paths
-    route_paths = [f["path"] for f in plan["files"] if f["path"].startswith("src/routes/") and f["path"] not in ("src/routes/index.js", "src/routes/auth.js")]
+    route_paths = [f["path"] for f in plan["files"] if f["path"].startswith("backend/src/routes/") and f["path"] not in ("backend/src/routes/index.js", "backend/src/routes/auth.js")]
     assert not route_paths, f"Unexpected route files: {route_paths}"
 
 
@@ -99,11 +100,11 @@ def test_vue_frontend():
     rules = _fastapi_vue_postgres_rules()
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
-    assert "src/main.js" in paths
-    assert "src/App.vue" in paths
-    assert "src/router/index.js" in paths
-    assert "src/views/Home.vue" in paths
-    assert "src/views/Dashboard.vue" in paths
+    assert "frontend/src/main.js" in paths
+    assert "frontend/src/App.vue" in paths
+    assert "frontend/src/router/index.js" in paths
+    assert "frontend/src/views/Home.vue" in paths
+    assert "frontend/src/views/Dashboard.vue" in paths
 
 
 def test_java_spring_backend():
@@ -124,16 +125,16 @@ def test_project_management_scenario():
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
     assert "README.md" in paths
-    assert "src/App.jsx" in paths
-    assert "src/pages/Workspaces.jsx" in paths
-    assert "src/pages/Boards.jsx" in paths
-    assert "src/pages/Tasks.jsx" in paths
-    assert "src/pages/Activity.jsx" in paths
-    assert "src/routes/workspaces.js" in paths
-    assert "src/routes/projects.js" in paths
-    assert "src/routes/tasks.js" in paths
-    assert "src/routes/activity.js" in paths
-    assert "src/routes/notifications.js" in paths
+    assert "frontend/src/App.jsx" in paths
+    assert "frontend/src/pages/Workspaces.jsx" in paths
+    assert "frontend/src/pages/Boards.jsx" in paths
+    assert "frontend/src/pages/Tasks.jsx" in paths
+    assert "frontend/src/pages/Activity.jsx" in paths
+    assert "backend/src/routes/workspaces.js" in paths
+    assert "backend/src/routes/projects.js" in paths
+    assert "backend/src/routes/tasks.js" in paths
+    assert "backend/src/routes/activity.js" in paths
+    assert "backend/src/routes/notifications.js" in paths
     assert "migrations/001_initial.sql" in paths
 
 
@@ -164,8 +165,8 @@ def test_mongodb_files():
     rules = _node_react_mongo_rules()
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
-    assert "src/config/database.js" in paths
-    assert "src/config/mongodb.js" not in paths
+    assert "backend/src/config/database.js" in paths
+    assert "backend/src/config/mongodb.js" not in paths
     assert "seeds/seed.js" in paths
     assert "migrations/001_initial.sql" not in paths
     purposes = "\n".join(f["purpose"] for f in plan["files"])
@@ -186,22 +187,22 @@ def test_unknown_framework_fallback():
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
     assert "README.md" in paths
-    assert "src/app.js" in paths
-    assert "src/main.js" in paths
-    assert "src/orders/index.js" in paths
-    assert "src/pages/Home.js" in paths
+    assert "backend/src/app.js" in paths
+    assert "frontend/src/main.js" in paths
+    assert "backend/src/orders/index.js" in paths
+    assert "frontend/src/pages/Home.js" in paths
 
 
 def test_package_json_no_overwrite():
     """Both backend and frontend package.json blueprints exist with unique paths."""
     plan = generate_build_plan(_node_react_postgres_rules())
     paths = [f["path"] for f in plan["files"]]
-    backend_count = sum(1 for p in paths if p == "package.json")
-    frontend_count = sum(1 for p in paths if p == "package_frontend.json")
-    assert "package.json" in paths, "Backend package.json missing"
-    assert "package_frontend.json" in paths, "Frontend package_frontend.json missing"
+    backend_count = sum(1 for p in paths if p == "backend/package.json")
+    frontend_count = sum(1 for p in paths if p == "frontend/package.json")
+    assert "backend/package.json" in paths, "Backend package.json missing"
+    assert "frontend/package.json" in paths, "Frontend package.json missing"
     assert backend_count == 1, f"Expected 1 backend package.json, got {backend_count}"
-    assert frontend_count == 1, f"Expected 1 frontend package_frontend.json, got {frontend_count}"
+    assert frontend_count == 1, f"Expected 1 frontend package.json, got {frontend_count}"
     total_package = sum(1 for p in paths if "package" in p)
     assert total_package == 2, f"Expected exactly 2 package files, got {total_package}"
 
@@ -226,7 +227,7 @@ def test_auth_auto_generates_user_model_node():
     }
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
-    assert "src/models/users.js" in paths, "User model should be auto-generated when auth is meaningful"
+    assert "backend/src/models/users.js" in paths, "User model should be auto-generated when auth is meaningful"
 
 
 def test_auth_auto_generates_user_model_python():
@@ -275,7 +276,7 @@ def test_no_duplicate_user_model_when_users_in_modules():
     }
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
-    user_model_count = sum(1 for p in paths if p == "src/models/users.js")
+    user_model_count = sum(1 for p in paths if p == "backend/src/models/users.js")
     assert user_model_count == 1, f"Expected exactly 1 users model, got {user_model_count}"
 
 
@@ -292,9 +293,9 @@ def test_auth_user_model_not_added_without_auth():
     }
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
-    assert "src/models/users.js" not in paths
-    assert "src/middleware/auth.js" not in paths
-    assert "src/routes/auth.js" not in paths
+    assert "backend/src/models/users.js" not in paths
+    assert "backend/src/middleware/auth.js" not in paths
+    assert "backend/src/routes/auth.js" not in paths
 
 
 # ---------------------------------------------------------------------------
@@ -402,8 +403,8 @@ def test_express_no_auth_has_no_auth_artifacts():
     plan = generate_build_plan(rules)
     paths = [f["path"] for f in plan["files"]]
     purposes = "\n".join(f["purpose"] for f in plan["files"])
-    assert "src/middleware/auth.js" not in paths
-    assert "src/routes/auth.js" not in paths
-    assert "src/models/users.js" not in paths
+    assert "backend/src/middleware/auth.js" not in paths
+    assert "backend/src/routes/auth.js" not in paths
+    assert "backend/src/models/users.js" not in paths
     assert "jsonwebtoken" not in purposes
     assert "bcrypt" not in purposes
