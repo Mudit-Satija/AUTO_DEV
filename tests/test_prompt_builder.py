@@ -13,7 +13,7 @@ def test_prompt_contains_file_section():
 
 def test_prompt_contains_instructions_section():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    assert "Instructions:" in prompt
+    assert "Rules:" in prompt
 
 
 def test_prompt_includes_backend_framework():
@@ -58,22 +58,22 @@ def test_instructions_require_raw_code():
 
 def test_instructions_forbid_markdown_blocks():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    assert "Do NOT wrap the code in markdown code blocks" in prompt
+    assert "No markdown code blocks" in prompt
 
 
 def test_instructions_forbid_explanations():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    assert "Do NOT include any explanations" in prompt
+    assert "No explanations or comments" in prompt
 
 
 def test_instructions_forbid_additional_files():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    assert "do not suggest or create additional files" in prompt
+    assert "Generate only this file" in prompt
 
 
 def test_instructions_require_complete_code():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    assert "complete, functional" in prompt
+    assert "complete and functional" in prompt
 
 
 def test_node_source_file():
@@ -94,7 +94,7 @@ def test_config_file():
     blueprint = {"path": "package.json", "type": "config", "purpose": "Node.js dependencies and scripts"}
     prompt = build_file_prompt(blueprint, _node_react_jwt_rules())
     assert "package.json" in prompt
-    assert "config" in prompt
+    assert "dependencies" in prompt
 
 
 def test_database_migration_file():
@@ -108,7 +108,7 @@ def test_documentation_file():
     blueprint = {"path": "README.md", "type": "documentation", "purpose": "Project overview and setup instructions"}
     prompt = build_file_prompt(blueprint, _node_react_jwt_rules())
     assert "README.md" in prompt
-    assert "documentation" in prompt
+    assert "overview" in prompt
 
 
 def test_missing_file_path_falls_back():
@@ -118,7 +118,7 @@ def test_missing_file_path_falls_back():
 
 def test_missing_project_rules_uses_defaults():
     prompt = build_file_prompt(_node_route_blueprint(), {})
-    assert "Unknown" in prompt
+    assert "none" in prompt
 
 
 def test_deterministic_output():
@@ -136,18 +136,18 @@ def test_prompt_starts_with_role():
 
 def test_prompt_ends_with_instructions():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    assert prompt.endswith('"connectDB" or "db"')
+    assert prompt.endswith("Export correctly.")
 
 
 def test_all_context_fields_listed():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    for label in ("Backend framework:", "Frontend framework:", "Database:", "Auth method:"):
+    for label in ("Backend:", "Frontend:", "Database:", "Auth:"):
         assert label in prompt
 
 
 def test_all_file_fields_listed():
     prompt = build_file_prompt(_node_route_blueprint(), _node_react_jwt_rules())
-    for label in ("Path:", "Purpose:", "Type:"):
+    for label in ("Path:", "Purpose:"):
         assert label in prompt
 
 

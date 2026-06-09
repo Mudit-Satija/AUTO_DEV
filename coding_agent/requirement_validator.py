@@ -1,12 +1,15 @@
-"""Requirement Validator — detects when generated code fails to implement
-requested features, even when syntax and imports are correct.
+"""Requirement Validator — verifies generated code implements SRS requirements.
 
-Uses the blueprint ``requirements`` list as the primary source of truth.
-Falls back to purpose-driven keyword matching when requirements is empty.
+Checks requirement coverage:
+  SRS → Build Plan → Generated Files
 
-Integration:
-  Generation -> Dependency Validation -> File Generation -> Import Validation
-  -> Smoke Testing -> Requirement Validation -> Package Output
+No hardcoded endpoint constants (login, register).
+No hardcoded entity names (users, products).
+No framework-specific syntax checks.
+
+Uses blueprint requirement lineage (source_requirement, source_page,
+source_entity, source_flow) to trace what was supposed to be generated
+and verify it exists in the output.
 """
 
 import logging
@@ -17,428 +20,66 @@ from typing import List, Optional
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Endpoint checking helpers
-# ---------------------------------------------------------------------------
-
-
-def _has_route_endpoint(content: str, endpoint: str, suffix: str) -> bool:
-    """Check if a route endpoint (login, register, etc.) appears in code."""
-    escaped = re.escape(endpoint)
-
-    if suffix in (".js", ".jsx"):
-        patterns = [
-            rf"""router\.(?:get|post|put|delete|all)\s*\(\s*['"]/?{escaped}['"]""",
-            rf"""app\.(?:get|post|put|delete|all)\s*\(\s*['"]/?{escaped}['"]""",
-        ]
-    elif suffix == ".py":
-        patterns = [
-            rf"""@(?:router|app)\.(?:get|post|put|delete)\s*\(\s*['"]/?{escaped}['"]""",
-            rf"""(?:router|app)\.(?:get|post|put|delete)\s*\(\s*['"]/?{escaped}['"]""",
-        ]
-    elif suffix == ".java":
-        patterns = [
-            rf"""@(?:Get|Post|Put|Delete)Mapping\s*\(\s*['"]/?{escaped}['"]""",
-        ]
-    else:
-        patterns = [rf"""\b{escaped}\b"""]
-
-    return any(re.search(p, content, re.IGNORECASE) for p in patterns)
+def _has_export(content: str, suffix: str) -> bool:
+    if suffix in (".js", ".jsx", ".ts", ".tsx"):
+        if re.search(r"export\s+default\s+(function|class|const|let|var|\w+)", content):
+            return True
+        if re.search(r"module\.exports\s*=", content):
+            return True
+        if re.search(r"export\s+\{", content):
+            return True
+        if re.search(r"export\s+(const|let|var|function|class|type|interface)\s+", content):
+            return True
+    if suffix == ".py":
+        if re.search(r"(def\s+\w+|class\s+\w+)", content):
+            return True
+    return False
 
 
 def _has_route_method(content: str, method: str, suffix: str) -> bool:
-    """Check if a file contains a route handler for a given HTTP method."""
-    if suffix in (".js", ".jsx"):
-        return bool(re.search(
-            rf"""(?:router|app)\.{method}\s*\(""", content, re.IGNORECASE
-        ))
+    if suffix in (".js", ".jsx", ".ts", ".tsx"):
+        return bool(re.search(rf"""(?:router|app)\.{method}\s*\(""", content, re.IGNORECASE))
     if suffix == ".py":
-        return bool(re.search(
-            rf"""@(?:router|app)\.{method}\s*\(""", content, re.IGNORECASE
-        ))
-    if suffix == ".java":
-        return bool(re.search(
-            rf"""@{method.capitalize()}Mapping\s*\(""", content
-        ))
+        return bool(re.search(rf"""@(?:router|app)\.{method}\s*\(""", content, re.IGNORECASE))
     return False
 
 
-# ---------------------------------------------------------------------------
-# Structural requirement checkers
-# ---------------------------------------------------------------------------
-
-
-def _check_component_export(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".jsx", ".js", ".tsx", ".ts"):
-        if re.search(r"export\s+default\s+(function|class|const|let|var)", content):
-            return True
-        if re.search(r"export\s+\{(?:[^}]+)\}", content):
-            return True
-        if re.search(r"export\s+(async\s+)?function\s+\w+", content):
-            return True
-        if suffix == ".jsx" and re.search(r"export\s+default\s+\w+", content):
-            return True
-    if suffix == ".vue":
-        if re.search(r"<template>", content) or re.search(
-            r"export\s+default\s*\{", content
-        ):
-            return True
+def _has_db_connection(content: str, suffix: str) -> bool:
+    if suffix in (".js", ".jsx", ".ts", ".tsx"):
+        return bool(re.search(r"(connect|pool|client|mongoose|sequelize|createConnection)\s*\(", content, re.IGNORECASE))
     if suffix == ".py":
-        if re.search(r"def\s+\w+", content):
-            return True
+        return bool(re.search(r"(create_engine|SessionLocal|connection|engine|database)", content, re.IGNORECASE))
     return False
 
 
-def _check_app_rendering(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".html":
-        return True
-    if suffix in (".js", ".jsx"):
-        if re.search(r"(render|createRoot|mount|hydrate)\s*\(", content):
-            return True
-    if suffix == ".py":
-        if re.search(r"uvicorn\.run|app\.run", content):
-            return True
-    return False
-
-
-def _check_server_start(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"\.listen\s*\(", content):
-            return True
-    if suffix == ".py":
-        if re.search(r"uvicorn\.run|app\.run", content):
-            return True
-    if suffix == ".java":
-        if re.search(r"SpringApplication\.run", content):
-            return True
-    return False
-
-
-def _check_middleware_setup(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"app\.use\s*\(", content) or re.search(
-            r"app\.set\s*\(", content
-        ):
-            return True
-    if suffix == ".py":
-        if re.search(r"add_middleware|Middleware", content):
-            return True
-    return False
-
-
-def _check_route_mounting(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"""app\.(?:use|get|post)\s*\(\s*['"]/""", content):
-            return True
-    if suffix == ".py":
-        if re.search(r"""app\.include_router|@app\.(?:get|post)""", content):
-            return True
-    return False
-
-
-def _check_route_aggregation(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"require\s*\(\s*['\"]\./|from\s+['\"]\./", content):
-            return True
-    return False
-
-
-def _check_route_configuration(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".vue":
-        return False
-    if suffix in (".js", ".jsx"):
-        if re.search(r"(routes?|Router|createBrowserRouter)", content):
-            return True
-    return False
-
-
-def _check_config_export(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"module\.exports\s*=|export\s+", content):
-            return True
-    if suffix == ".py":
-        if re.search(r"(Settings|config|Config|BaseSettings|pydantic)", content, re.IGNORECASE):
-            return True
-    return False
-
-
-def _check_db_connection(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(
-            r"(createConnection|connect|pool|client|mongoose|sequelize)\s*\(",
-            content,
-            re.IGNORECASE,
-        ):
-            return True
-    if suffix == ".py":
-        if re.search(
-            r"(create_engine|SessionLocal|connection|engine|database|DATABASE)",
-            content,
-            re.IGNORECASE,
-        ):
-            return True
-    if suffix == ".java":
-        if re.search(r"(DataSource|EntityManager|DataSourceConfig)", content):
-            return True
-    return False
-
-
-def _check_jwt(content: str, suffix: str, bp: dict) -> bool:
-    if re.search(r"(jwt|jsonwebtoken|JWT|sign|verify|token)", content, re.IGNORECASE):
-        return True
-    return False
-
-
-def _check_error_handler(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(
-            r"(errorHandler|err,\s*req|app\.use\s*\(\s*\(?\s*err|middleware)", content
-        ):
-            return True
-    if suffix == ".py":
-        if re.search(r"HTTPException|ExceptionHandler|error", content, re.IGNORECASE):
-            return True
-    return False
-
-
-def _check_api_functions(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        return bool(re.search(
-            r"(export\s+(async\s+)?function|export\s+const|module\.exports)", content
-        ))
-    if suffix == ".py":
-        return bool(re.search(r"(async\s+)?def\s+\w+", content))
-    return False
-
-
-def _check_crud_list(content: str, suffix: str, bp: dict) -> bool:
-    return _has_route_method(content, "get", suffix)
-
-
-def _check_crud_create(content: str, suffix: str, bp: dict) -> bool:
-    return _has_route_method(content, "post", suffix)
-
-
-def _check_crud_update(content: str, suffix: str, bp: dict) -> bool:
-    return _has_route_method(content, "put", suffix)
-
-
-def _check_crud_delete(content: str, suffix: str, bp: dict) -> bool:
-    return _has_route_method(content, "delete", suffix)
-
-
-def _check_controller_functions(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"(exports\.\w+\s*=|module\.exports|export\s+)", content):
-            return True
-    if suffix == ".py":
-        if re.search(r"(async\s+)?def\s+\w+", content):
-            return True
-    return False
-
-
-def _check_model_definition(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(
-            r"(Schema|model|mongoose\.model|sequelize\.define|type\s+|interface\s+)",
-            content,
-            re.IGNORECASE,
-        ):
-            return True
-        if re.search(r"(pool\.query|SELECT|INSERT\s+INTO|UPDATE\s+\w+|DELETE\s+FROM)", content, re.IGNORECASE):
-            return True
-    if suffix == ".py":
-        if re.search(r"(class\s+\w+|Column|Table|Model|Base)", content):
-            return True
-    return False
-
-
-def _check_schema_creation(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".sql":
-        if re.search(r"(CREATE\s+TABLE|CREATE\s+INDEX|CREATE\s+SCHEMA)", content, re.IGNORECASE):
-            return True
-    return False
-
-
-def _check_seed_data(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".sql":
-        if re.search(r"(INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM)", content, re.IGNORECASE):
-            return True
-    if suffix in (".js", ".jsx"):
-        if re.search(r"(insert|seed|create|save)\s*\(", content, re.IGNORECASE):
-            return True
-    if suffix == ".py":
-        if re.search(r"(insert|seed|create|save|collection|\.insert_one|\.insert_many|\.create)", content, re.IGNORECASE):
-            return True
-    return False
-
-
-def _check_declarative_base(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".py":
-        if re.search(r"(declarative_base|Base\s*=\s*|metadata)", content):
-            return True
-    return False
-
-
-def _check_security_config(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".py":
-        if re.search(r"(security|SECRET|oauth|JWT|password|hash)", content, re.IGNORECASE):
-            return True
-    if suffix == ".java":
-        if re.search(r"(Security|SecurityConfig|@Enable)", content):
-            return True
-    return False
-
-
-def _check_business_logic(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".py":
-        if re.search(r"(async\s+)?def\s+\w+", content):
-            return True
-    if suffix == ".java":
-        if re.search(r"(class\s+\w+Service|@Service)", content):
-            return True
-    return False
-
-
-def _check_data_access(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".java":
-        if re.search(r"(Repository|@Repository|JpaRepository|CrudRepository)", content):
-            return True
-    return False
-
-
-def _check_entity_definition(content: str, suffix: str, bp: dict) -> bool:
-    if suffix == ".java":
-        if re.search(r"(@Entity|@Table|class\s+\w+\s*\{)", content):
-            return True
-    return False
-
-
-def _check_application_setup(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"(express|app|require|import)", content):
-            return True
-    if suffix == ".py":
-        if re.search(r"(FastAPI\(|FastAPI|include_router|uvicorn)", content):
-            return True
-    return False
-
-
-def _check_module_functions(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"(module\.exports|export\s+|function\s+)", content):
-            return True
-    return False
-
-
-def _check_page_content(content: str, suffix: str, bp: dict) -> bool:
-    if suffix in (".js", ".jsx"):
-        if re.search(r"(function|class|const|import|export)", content):
-            return True
-    return False
-
-
-# ---------------------------------------------------------------------------
-# Requirement registries
-# ---------------------------------------------------------------------------
-
-_ENDPOINT_REQUIREMENTS: set = {
-    "login", "register", "logout",
-}
-
-_STRUCTURAL_REQUIREMENTS: dict = {
-    "component export": _check_component_export,
-    "app rendering": _check_app_rendering,
-    "app mounting": _check_app_rendering,
-    "server start": _check_server_start,
-    "app startup": _check_server_start,
-    "application startup": _check_server_start,
-    "app setup": _check_application_setup,
-    "application setup": _check_application_setup,
-    "middleware setup": _check_middleware_setup,
-    "route mounting": _check_route_mounting,
-    "router mounting": _check_route_mounting,
-    "route aggregation": _check_route_aggregation,
-    "route configuration": _check_route_configuration,
-    "configuration export": _check_config_export,
-    "configuration settings": _check_config_export,
-    "database connection": _check_db_connection,
-    "mongodb connection": _check_db_connection,
-    "database configuration": _check_db_connection,
-    "jwt verification": _check_jwt,
-    "token validation": _check_jwt,
-    "error handling": _check_error_handler,
-    "api functions": _check_api_functions,
-    "controller functions": _check_controller_functions,
-    "model definition": _check_model_definition,
-    "schema definition": _check_model_definition,
-    "schema creation": _check_schema_creation,
-    "seed data": _check_seed_data,
-    "declarative base": _check_declarative_base,
-    "security configuration": _check_security_config,
-    "business logic": _check_business_logic,
-    "data access": _check_data_access,
-    "entity definition": _check_entity_definition,
-    "application setup": _check_application_setup,
-    "module functions": _check_module_functions,
-    "page content": _check_page_content,
-    "list": _check_crud_list,
-    "create": _check_crud_create,
-    "update": _check_crud_update,
-    "delete": _check_crud_delete,
-}
-
-_PURPOSE_KEYWORDS: dict = {
-    "authentication routes": ["login", "register", "logout"],
-    "api routes": ["list", "create", "update", "delete"],
-    "route handlers": ["list", "create", "update", "delete"],
-    "controller logic": ["controller functions"],
-    "data model": ["model definition"],
-    "schema": ["schema definition"],
-    "database migration": ["schema creation"],
-    "seed data": ["seed data"],
-    "pydantic schemas": ["schema definition"],
-    "sqlalchemy model": ["model definition"],
-    "business logic": ["business logic"],
-    "data repository": ["data access"],
-    "jpa entity": ["entity definition"],
-    "page view": ["component export"],
-    "page": ["component export"],
-    "component": ["component export"],
-    "api client": ["api functions"],
-    "api service": ["api functions"],
-    "entry point": ["app rendering"],
-    "application setup": ["middleware setup", "route mounting"],
-    "app setup": ["app setup", "router mounting"],
-    "configuration": ["configuration export"],
-    "database connection": ["database connection"],
-    "connection setup": ["database connection"],
+_STRUCTURAL_REQUIREMENTS = {
+    "component export": lambda c, s, _: _has_export(c, s),
+    "app rendering": lambda c, s, _: bool(re.search(r"(render|createRoot|mount|hydrate)\s*\(", c)) if s in (".js", ".jsx", ".ts", ".tsx", ".html") else False,
+    "server start": lambda c, s, _: bool(re.search(r"\.listen\s*\(", c)) if s in (".js", ".jsx", ".ts", ".tsx") else bool(re.search(r"uvicorn\.run", c)) if s == ".py" else False,
+    "app setup": lambda c, s, _: bool(re.search(r"(express\(|FastAPI\(|app\s*=)", c)) if s in (".js", ".jsx", ".ts", ".tsx", ".py") else False,
+    "middleware setup": lambda c, s, _: bool(re.search(r"app\.use\s*\(", c)) if s in (".js", ".jsx", ".ts", ".tsx") else bool(re.search(r"add_middleware", c)) if s == ".py" else False,
+    "route mounting": lambda c, s, _: bool(re.search(r"""app\.(?:use|get|post)\s*\(\s*['"]/""", c)) if s in (".js", ".jsx", ".ts", ".tsx") else bool(re.search(r"app\.include_router", c)) if s == ".py" else False,
+    "database connection": lambda c, s, _: _has_db_connection(c, s),
+    "model definition": lambda c, s, _: bool(re.search(r"(Schema|model|mongoose\.model|class\s+\w+|Column\s*=|Table|type\s+|interface\s+)", c, re.IGNORECASE)) if s in (".js", ".jsx", ".ts", ".tsx", ".py") else False,
+    "schema definition": lambda c, s, _: bool(re.search(r"(Schema|pydantic|BaseModel)", c)) if s == ".py" else bool(re.search(r"(type\s+|interface\s+)", c)) if s in (".ts", ".tsx") else False,
+    "schema creation": lambda c, s, _: bool(re.search(r"(CREATE\s+TABLE|CREATE\s+INDEX)", c, re.IGNORECASE)) if s == ".sql" else False,
+    "seed data": lambda c, s, _: bool(re.search(r"(INSERT\s+INTO|insert\s*\(|seed|\.insert_one|\.insert_many|\.create\s*\()", c, re.IGNORECASE)),
+    "configuration export": lambda c, s, _: bool(re.search(r"(module\.exports|export\s+|Settings|Config|BaseSettings)", c)) if s in (".js", ".jsx", ".ts", ".tsx", ".py") else False,
+    "error handling": lambda c, s, _: bool(re.search(r"(errorHandler|err,\s*req|app\.use\s*\(\s*\(?\s*err|HTTPException)", c)),
+    "api client": lambda c, s, _: bool(re.search(r"(axios|fetch|create\s*\()", c)) if s in (".js", ".jsx", ".ts", ".tsx") else False,
+    "business logic": lambda c, s, _: bool(re.search(r"(async\s+)?def\s+\w+", c)) if s == ".py" else False,
+    "route aggregation": lambda c, s, _: bool(re.search(r"require\s*\(\s*['\"]\./|from\s+['\"]\./", c)) if s in (".js", ".jsx", ".ts", ".tsx") else False,
+    "route configuration": lambda c, s, _: bool(re.search(r"(routes?|Router|createBrowserRouter)", c)) if s in (".js", ".jsx", ".ts", ".tsx") else False,
+    "list": lambda c, s, _: _has_route_method(c, "get", s),
+    "create": lambda c, s, _: _has_route_method(c, "post", s),
+    "update": lambda c, s, _: _has_route_method(c, "put", s),
+    "delete": lambda c, s, _: _has_route_method(c, "delete", s),
 }
 
 
-# ---------------------------------------------------------------------------
-# Requirement checking (primary path)
-# ---------------------------------------------------------------------------
-
-
-def _check_requirement(
-    content: str,
-    requirement: str,
-    suffix: str,
-    bp: dict,
-    root: Path,
-) -> Optional[str]:
-    """Check a single requirement against file content.
-
-    Returns an error string or None if satisfied.
-    """
+def _check_requirement(content: str, requirement: str, suffix: str, bp: dict) -> Optional[str]:
     req_lower = requirement.lower().strip()
     file_ref = bp.get("path", "unknown")
-
-    if req_lower in _ENDPOINT_REQUIREMENTS:
-        if _has_route_endpoint(content, req_lower, suffix):
-            return None
-        return f"endpoint '{requirement}' not found in {file_ref}"
 
     checker = _STRUCTURAL_REQUIREMENTS.get(req_lower)
     if checker is not None:
@@ -452,171 +93,29 @@ def _check_requirement(
     return f"'{requirement}' not found in {file_ref}"
 
 
-# ---------------------------------------------------------------------------
-# Purpose fallback
-# ---------------------------------------------------------------------------
-
-
-def _derive_requirements_from_purpose(purpose: str) -> List[str]:
-    """Derive requirement strings from purpose text when no explicit
-    requirements list is provided."""
-    purpose_lower = purpose.lower().strip()
-    for keyword, reqs in _PURPOSE_KEYWORDS.items():
-        if keyword in purpose_lower:
-            return reqs
-    return []
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
-def validate_spec_compliance(content: str, blueprint: dict) -> List[dict]:
-    """Check generated file content against blueprint spec contract.
-
-    When a blueprint has a ``spec`` field, verifies the generated code
-    implements every requirement encoded in the spec. Returns a list of
-    error dicts (empty when compliant).
-    """
-    errors: List[dict] = []
-    spec = blueprint.get("spec")
-    if not spec:
-        return errors
-
-    file_path = blueprint.get("path", "unknown")
-
-    # Only check endpoint-based specs, not mount-based (index.js) specs
-    if "mounts" in spec:
-        return errors
-
-    endpoints = spec.get("endpoints", [])
-    model = spec.get("model", {})
-    operations = model.get("operations", [])
-    middleware_list = spec.get("middleware", [])
-
-    endpoint_paths = {ep["path"] for ep in endpoints}
-    endpoint_methods = {(ep["method"], ep["path"]) for ep in endpoints}
-
-    # 1. Check GET /stats endpoint
-    if "/stats" in endpoint_paths:
-        if not re.search(r"""router\.get\s*\(\s*['"]/stats['"]""", content):
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": "Missing GET /stats route",
-            })
-
-    # 2. Check router.use(middleware_name) when middleware apply contains router.use
-    for mw in middleware_list:
-        apply_str = mw.get("apply", "")
-        if "router.use" in apply_str:
-            m = re.search(r"router\.use\((\w+)\)", apply_str)
-            if m:
-                mw_name = m.group(1)
-                if not re.search(rf"""router\.use\s*\(\s*{re.escape(mw_name)}\s*\)""", content):
-                    errors.append({
-                        "file": file_path,
-                        "requirement": "spec compliance",
-                        "error": f"Missing router.use({mw_name})",
-                    })
-
-    # 3. Check findByIdAndDelete — no .remove()
-    if "findByIdAndDelete" in operations:
-        if re.search(r"""\.remove\s*\(\s*\)""", content):
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": "Uses deprecated .remove() — use findByIdAndDelete",
-            })
-
-    # 4. Check findByIdAndUpdate is used
-    if "findByIdAndUpdate" in operations:
-        if not re.search(r"findByIdAndUpdate", content):
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": "Missing findByIdAndUpdate",
-            })
-
-    # 5. Check POST / returns 201
-    if ("POST", "/") in endpoint_methods:
-        if not re.search(r"status\s*\(\s*201\s*\)", content):
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": "POST route must return 201 status",
-            })
-
-    # 6. Check DELETE /:id returns 204
-    if ("DELETE", "/:id") in endpoint_methods:
-        if not re.search(r"status\s*\(\s*204\s*\)", content):
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": "DELETE route must return 204 status",
-            })
-
-    # 7. Check frontend api_calls — each endpoint must appear in the file
-    api_calls = spec.get("api_calls", [])
-    for call in api_calls:
-        endpoint = call.get("endpoint", "")
-        if "/:id" in endpoint:
-            continue
-        if endpoint and endpoint not in content:
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": f"Missing API call to {endpoint}",
-            })
-
-    # 8. Check middleware JWT decode assignment
-    req_user = spec.get("req_user_assignment")
-    if req_user:
-        if "req.user = decoded.user" in content:
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": "Wrong JWT decode assignment — use req.user = decoded not req.user = decoded.user",
-            })
-        elif req_user not in content:
-            errors.append({
-                "file": file_path,
-                "requirement": "spec compliance",
-                "error": "Wrong JWT decode assignment — use req.user = decoded not req.user = decoded.user",
-            })
-
-    return errors
-
-
 def validate_requirements(project_dir: str, build_plan: dict) -> dict:
-    """Validate that generated files satisfy their blueprint requirements.
+    """Validate generated files against their blueprint requirements.
 
-    Each blueprint's ``requirements`` list specifies what the generated file
-    must contain.  When ``requirements`` is empty the validator falls back
-    to purpose-driven keyword matching.
+    Uses the 'requirements' list from each blueprint as the source of truth.
+    No fallback to purpose-driven keyword matching.
+    No hardcoded endpoint/entity constants.
 
     Args:
         project_dir: Root directory of the generated project.
-        build_plan: Output from build_plan.generate_build_plan() with key
-            "files" containing blueprint dicts.
+        build_plan: Output from build_plan.generate_build_plan().
 
     Returns:
-        Dict with keys:
-            success (bool): True when no errors found.
-            errors (list[dict]): Each dict has file, requirement, error.
+        Dict with keys: success (bool), errors (list[dict]).
     """
     root = Path(project_dir)
     if not root.is_dir():
         return {
             "success": False,
-            "errors": [
-                {
-                    "file": project_dir,
-                    "requirement": "project directory",
-                    "error": "Project directory not found",
-                }
-            ],
+            "errors": [{
+                "file": project_dir,
+                "requirement": "project directory",
+                "error": "Project directory not found",
+            }],
         }
 
     errors: List[dict] = []
@@ -625,79 +124,26 @@ def validate_requirements(project_dir: str, build_plan: dict) -> dict:
     for bp in blueprints:
         filepath = root / bp["path"]
         if not filepath.is_file():
+            errors.append({
+                "file": bp["path"],
+                "requirement": "file_exists",
+                "error": f"File not generated: {bp['path']}",
+            })
             continue
 
         content = filepath.read_text(encoding="utf-8", errors="replace")
         requirements = bp.get("requirements", [])
 
-        if requirements:
-            for req in requirements:
-                error = _check_requirement(
-                    content, req, filepath.suffix, bp, root
-                )
-                if error is not None:
-                    errors.append({
-                        "file": bp["path"],
-                        "requirement": req,
-                        "error": error,
-                    })
-        else:
-            purpose = bp.get("purpose", "")
-            reqs_from_purpose = _derive_requirements_from_purpose(purpose)
-            for req in reqs_from_purpose:
-                error = _check_requirement(
-                    content, req, filepath.suffix, bp, root
-                )
-                if error is not None:
-                    errors.append({
-                        "file": bp["path"],
-                        "requirement": req,
-                        "error": error,
-                    })
+        if not requirements:
+            continue
 
-        # Spec compliance — check generated code against blueprint spec
-        spec_errors = validate_spec_compliance(content, bp)
-        errors.extend(spec_errors)
-
-        # Path-based compliance checks (regardless of spec presence)
-        file_ref = bp.get("path", "unknown")
-
-        if file_ref.endswith("models/users.js"):
-            if "bcrypt" not in content or "pre(" not in content:
+        for req in requirements:
+            error = _check_requirement(content, req, filepath.suffix, bp)
+            if error is not None:
                 errors.append({
-                    "file": file_ref,
-                    "requirement": "spec compliance",
-                    "error": "Missing bcrypt pre-save hook in User model",
-                })
-
-        if file_ref.endswith("src/app.js"):
-            if "connectDB().then(" not in content:
-                errors.append({
-                    "file": file_ref,
-                    "requirement": "spec compliance",
-                    "error": "connectDB() must use .then() before app.listen()",
-                })
-            if "app.use(authenticateToken)" in content:
-                errors.append({
-                    "file": file_ref,
-                    "requirement": "spec compliance",
-                    "error": "Auth middleware must not be global in app.js",
-                })
-
-        if file_ref.endswith("services/api.js"):
-            if "interceptors.request.use(" not in content or "interceptors.response.use(" not in content:
-                errors.append({
-                    "file": file_ref,
-                    "requirement": "spec compliance",
-                    "error": "Missing request/response interceptors in api.js",
-                })
-
-        if file_ref.endswith("App.jsx"):
-            if "PrivateRoute" not in content or "<a href" in content:
-                errors.append({
-                    "file": file_ref,
-                    "requirement": "spec compliance",
-                    "error": "Missing PrivateRoute or using <a> instead of <Link>",
+                    "file": bp["path"],
+                    "requirement": req,
+                    "error": error,
                 })
 
     return {"success": len(errors) == 0, "errors": errors}

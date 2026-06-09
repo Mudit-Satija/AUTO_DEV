@@ -1,0 +1,47 @@
+{
+  "frontend/src/App.jsx": {
+    "purpose": "Root application component with routing",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\src\\App.jsx"
+  },
+  "frontend/vite.config.js": {
+    "purpose": "Vite build configuration",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\vite.config.js"
+  },
+  "seeds/seed.js": {
+    "purpose": "MongoDB seed data script for development",
+    "type": "database",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\seeds\\seed.js"
+  },
+  "frontend/.env": {
+    "purpose": "Frontend environment variables - must define VITE_API_BASE_URL=http://localhost:5000/api",
+    "type": "env",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\.env"
+  },
+  "frontend/package.json": {
+    "purpose": "Frontend dependencies and scripts \u00e2\u20ac\u201d must include react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\package.json"
+  },
+  "frontend/src/main.jsx": {
+    "purpose": "React entry point",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\src\\main.jsx"
+  },
+  "frontend/src/pages/Completedtasks.jsx": {
+    "purpose": "CompletedTasks page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\src\\pages\\Completedtasks.jsx"
+  },
+  "frontend/src/pages/Pendingtasks.jsx": {
+    "purpose": "PendingTasks page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\src\\pages\\Pendingtasks.jsx"
+  },
+  "frontend/src/services/api.js": {
+    "purpose": "API client configuration using axios \u00e2\u20ac\u201d uses import.meta.env.VITE_API_BASE_URL (Vite convention, not process.env)",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\project_1780987971\\frontend\\src\\services\\api.js"
+  }
+}

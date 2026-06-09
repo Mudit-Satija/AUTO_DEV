@@ -1,410 +1,161 @@
-﻿from coding_agent.build_plan import generate_build_plan
+﻿"""Tests for the SRS-driven build plan generator.
+
+Validates:
+- Requirement lineage on every file
+- Pages come ONLY from SRS.pages
+- Entities come ONLY from SRS.entities
+- No hardcoded auth files
+- No hardcoded entity names
+"""
+
+from coding_agent.build_plan import generate_build_plan
+from coding_agent.rules_engine import build_project_rules
+
+
+def _sample_srs_inventory():
+    return {
+        "project_name": "Inventory Manager",
+        "project_description": "Track inventory items",
+        "complexity": "intermediate",
+        "pages": [
+            {"name": "Items", "purpose": "List inventory items", "entities": ["Item"]},
+            {"name": "Stock In", "purpose": "Record incoming stock", "entities": ["Item", "Supplier"]},
+        ],
+        "flow": [
+            {"name": "Receive Stock", "steps": ["Item arrives", "Record quantity"], "entities": ["Item", "Supplier"]},
+        ],
+        "entities": [
+            {"name": "Item", "fields": ["sku", "name", "quantity"], "description": "Inventory item"},
+            {"name": "Supplier", "fields": ["name", "email"], "description": "Supplier"},
+        ],
+        "roles": ["admin"],
+        "tech_stack": {"backend": "Express.js", "frontend": "React", "database": "MongoDB"},
+        "requirements": [],
+    }
+
+
+def _make_rules(srs_override=None):
+    srs = _sample_srs_inventory()
+    if srs_override:
+        srs.update(srs_override)
+    tech_stack = srs.get("tech_stack", {})
+    return build_project_rules(srs, tech_stack)
 
 
 def test_readme_always_included():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    paths = {f["path"] for f in plan["files"]}
     assert "README.md" in paths
 
 
-def test_node_backend_core_files():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
-    assert "backend/package.json" in paths
-    assert "backend/src/app.js" in paths
-    assert "backend/src/config/index.js" in paths
-    assert "backend/src/config/database.js" in paths
-    assert "backend/src/middleware/auth.js" in paths
-    assert "backend/src/middleware/errorHandler.js" in paths
-    assert "backend/src/routes/index.js" in paths
+def test_pages_come_only_from_srs():
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    page_files = [f for f in plan["files"] if f["type"] == "page"]
+    page_names = {f["source_page"] for f in page_files}
+    # Only Items and Stock In — no Login, Register, Dashboard, Settings, Profile
+    assert page_names == {"Items", "Stock In"}, f"Got pages: {page_names}"
 
 
-def test_node_backend_module_files():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
-    assert "backend/src/routes/workspaces.js" in paths
-    assert "backend/src/models/workspaces.js" in paths
-    assert "backend/src/routes/projects.js" in paths
-    assert "backend/src/models/projects.js" in paths
-    assert "backend/src/routes/tasks.js" in paths
-    assert "backend/src/models/tasks.js" in paths
+def test_no_auth_artifacts():
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    paths = {f["path"] for f in plan["files"]}
+    forbidden = {"backend/src/middleware/auth.js", "backend/src/routes/auth.js",
+                 "backend/src/models/users.js", "app/core/security.py",
+                 "app/routers/auth.py", "app/models/user.py"}
+    assert not (paths & forbidden), f"Auth artifacts found: {paths & forbidden}"
 
 
-def test_react_frontend_core_files():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
-    assert "frontend/package.json" in paths
-    assert "frontend/.env" in paths
-    assert "frontend/vite.config.js" in paths
-    assert "frontend/index.html" in paths
-    assert "frontend/src/main.jsx" in paths
-    assert "frontend/src/App.jsx" in paths
-    assert "frontend/src/App.css" in paths
-    assert "frontend/src/services/api.js" in paths
+def test_no_hardcoded_entities():
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    model_paths = [f["path"] for f in plan["files"] if "models/" in f["path"]]
+    # Should only have Item and Supplier models — no workspaces, projects, tasks, users
+    model_names = {p.split("/")[-1].replace(".js", "") for p in model_paths}
+    assert model_names == {"item", "supplier"}, f"Got models: {model_names}"
 
 
-def test_react_frontend_page_files():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
-    assert "frontend/src/pages/Home.jsx" in paths
-    assert "frontend/src/pages/Login.jsx" in paths
-    assert "frontend/src/pages/Dashboard.jsx" in paths
-    assert "frontend/src/pages/Settings.jsx" in paths
+def test_no_hardcoded_pages():
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    page_paths = [f["path"].lower() for f in plan["files"] if f["type"] == "page"]
+    hardcoded = {"login", "register", "dashboard", "profile", "settings"}
+    for hp in hardcoded:
+        assert not any(hp in p for p in page_paths), f"Hardcoded page '{hp}' found in {page_paths}"
 
 
-def test_postgres_database_files():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
+def test_every_file_has_lineage():
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    for f in plan["files"]:
+        assert f.get("reason_for_existence"), f"No reason_for_existence in {f['path']}"
+        has_lineage = bool(f.get("source_requirement") or f.get("source_page") or f.get("source_entity") or f.get("source_flow"))
+        if f["type"] not in ("documentation", "config", "env", "database"):
+            assert has_lineage, f"No lineage in {f['path']} of type {f['type']}"
+
+
+def test_entities_in_srs_match_build_plan():
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    srs_entities = {"item", "supplier"}
+    for f in plan["files"]:
+        if f.get("source_entity"):
+            for ent in f["source_entity"].split("; "):
+                ent_clean = ent.strip().lower()
+                if ent_clean:
+                    assert ent_clean in srs_entities, f"Entity '{ent_clean}' not in SRS entities"
+
+
+def test_fastapi_python_backend():
+    srs = _sample_srs_inventory()
+    srs["tech_stack"] = {"backend": "FastAPI", "frontend": "React", "database": "PostgreSQL"}
+    rules = _make_rules(srs)
+    plan = generate_build_plan(rules)
+    paths = {f["path"] for f in plan["files"]}
+    assert "requirements.txt" in paths
+    assert "app/main.py" in paths
+    assert "app/db/database.py" in paths
+    assert "app/routers/item.py" in paths
+    assert "app/models/item.py" in paths
+
+
+def test_no_hardcoded_domain_hints():
+    """Verify no workspaces/tasks appear as module paths."""
+    rules = _make_rules()
+    plan = generate_build_plan(rules)
+    hardcoded_modules = {"workspace", "task"}
+    for f in plan["files"]:
+        path_lower = f["path"].lower()
+        for hd in hardcoded_modules:
+            assert hd not in path_lower, f"Hardcoded '{hd}' in path {f['path']}"
+
+
+def test_vue_frontend_files():
+    srs = _sample_srs_inventory()
+    srs["tech_stack"] = {"backend": "Express.js", "frontend": "Vue", "database": "MongoDB"}
+    rules = _make_rules(srs)
+    plan = generate_build_plan(rules)
+    paths = {f["path"] for f in plan["files"]}
+    assert "frontend/src/App.vue" in paths
+    assert "frontend/src/router/index.js" in paths
+    assert "frontend/src/views/Items.vue" in paths
+    assert "frontend/src/views/StockIn.vue" in paths
+
+
+def test_database_files_for_sql():
+    srs = _sample_srs_inventory()
+    srs["tech_stack"] = {"backend": "Express.js", "frontend": "React", "database": "PostgreSQL"}
+    rules = _make_rules(srs)
+    plan = generate_build_plan(rules)
+    paths = {f["path"] for f in plan["files"]}
     assert "migrations/001_initial.sql" in paths
     assert "seeds/seed.sql" in paths
 
 
-def test_empty_modules_and_pages():
-    rules = {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "PostgreSQL",
-        "auth_method": "JWT",
-        "deployment": "AWS",
-        "required_pages": [],
-        "required_backend_modules": [],
-    }
+def test_database_files_for_mongo():
+    rules = _make_rules()
     plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "README.md" in paths
-    assert "backend/src/app.js" in paths
-    assert "frontend/src/main.jsx" in paths
-    assert "migrations/001_initial.sql" in paths
-    route_paths = [f["path"] for f in plan["files"] if f["path"].startswith("backend/src/routes/") and f["path"] not in ("backend/src/routes/index.js", "backend/src/routes/auth.js")]
-    assert not route_paths, f"Unexpected route files: {route_paths}"
-
-
-def test_python_fastapi_backend():
-    rules = _fastapi_vue_postgres_rules()
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "requirements.txt" in paths
-    assert "main.py" in paths
-    assert "app/__init__.py" in paths
-    assert "app/main.py" in paths
-    assert "app/core/config.py" in paths
-    assert "app/core/security.py" in paths
-    assert "app/db/database.py" in paths
-    assert "app/routers/workspaces.py" in paths
-    assert "app/schemas/workspaces.py" in paths
-    assert "app/models/workspaces.py" in paths
-    assert "app/services/workspaces.py" in paths
-
-
-def test_vue_frontend():
-    rules = _fastapi_vue_postgres_rules()
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "frontend/src/main.js" in paths
-    assert "frontend/src/App.vue" in paths
-    assert "frontend/src/router/index.js" in paths
-    assert "frontend/src/views/Home.vue" in paths
-    assert "frontend/src/views/Dashboard.vue" in paths
-
-
-def test_java_spring_backend():
-    rules = _spring_react_mysql_rules()
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "pom.xml" in paths
-    assert "src/main/resources/application.yml" in paths
-    assert "src/main/java/com/app/Application.java" in paths
-    assert "src/main/java/com/app/config/SecurityConfig.java" in paths
-    files = plan["files"]
-    controller_files = [f for f in files if f["path"].endswith("Controller.java")]
-    assert any("workspaces" in f["path"].lower() for f in controller_files)
-
-
-def test_project_management_scenario():
-    rules = _pm_rules()
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "README.md" in paths
-    assert "frontend/src/App.jsx" in paths
-    assert "frontend/src/pages/Workspaces.jsx" in paths
-    assert "frontend/src/pages/Boards.jsx" in paths
-    assert "frontend/src/pages/Tasks.jsx" in paths
-    assert "frontend/src/pages/Activity.jsx" in paths
-    assert "backend/src/routes/workspaces.js" in paths
-    assert "backend/src/routes/projects.js" in paths
-    assert "backend/src/routes/tasks.js" in paths
-    assert "backend/src/routes/activity.js" in paths
-    assert "backend/src/routes/notifications.js" in paths
-    assert "migrations/001_initial.sql" in paths
-
-
-def test_each_file_has_required_keys():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    for f in plan["files"]:
-        assert "path" in f, f"Missing 'path' in {f}"
-        assert "type" in f, f"Missing 'type' in {f}"
-        assert "purpose" in f, f"Missing 'purpose' in {f}"
-        assert "depends_on" in f, f"Missing 'depends_on' in {f}"
-        assert "provides" in f, f"Missing 'provides' in {f}"
-
-
-def test_output_has_files_key():
-    plan = generate_build_plan(_node_react_postgres_rules())
-    assert "files" in plan
-    assert isinstance(plan["files"], list)
-
-
-def test_deterministic_output():
-    rules = _node_react_postgres_rules()
-    plan1 = generate_build_plan(rules)
-    plan2 = generate_build_plan(rules)
-    assert plan1 == plan2
-
-
-def test_mongodb_files():
-    rules = _node_react_mongo_rules()
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "backend/src/config/database.js" in paths
-    assert "backend/src/config/mongodb.js" not in paths
+    paths = {f["path"] for f in plan["files"]}
     assert "seeds/seed.js" in paths
-    assert "migrations/001_initial.sql" not in paths
-    purposes = "\n".join(f["purpose"] for f in plan["files"])
-    assert "pg.Pool" not in purposes
-    assert "SQLAlchemy" not in purposes
-
-
-def test_unknown_framework_fallback():
-    rules = {
-        "backend_framework": "Unknown",
-        "frontend_framework": "Unknown",
-        "database": "Unknown",
-        "auth_method": "Unknown",
-        "deployment": "Not specified",
-        "required_pages": ["Home"],
-        "required_backend_modules": ["orders"],
-    }
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "README.md" in paths
-    assert "backend/src/app.js" in paths
-    assert "frontend/src/main.js" in paths
-    assert "backend/src/orders/index.js" in paths
-    assert "frontend/src/pages/Home.js" in paths
-
-
-def test_package_json_no_overwrite():
-    """Both backend and frontend package.json blueprints exist with unique paths."""
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
-    backend_count = sum(1 for p in paths if p == "backend/package.json")
-    frontend_count = sum(1 for p in paths if p == "frontend/package.json")
-    assert "backend/package.json" in paths, "Backend package.json missing"
-    assert "frontend/package.json" in paths, "Frontend package.json missing"
-    assert backend_count == 1, f"Expected 1 backend package.json, got {backend_count}"
-    assert frontend_count == 1, f"Expected 1 frontend package.json, got {frontend_count}"
-    total_package = sum(1 for p in paths if "package" in p)
-    assert total_package == 2, f"Expected exactly 2 package files, got {total_package}"
-
-
-def test_no_duplicate_paths():
-    """Every file blueprint must have a unique path â€” no overwrites possible."""
-    plan = generate_build_plan(_node_react_postgres_rules())
-    paths = [f["path"] for f in plan["files"]]
-    assert len(paths) == len(set(paths)), f"Duplicate paths detected: {[p for p in paths if paths.count(p) > 1]}"
-
-
-def test_auth_auto_generates_user_model_node():
-    """JWT auth without 'users' module should auto-generate User model in Node/Express."""
-    rules = {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "PostgreSQL",
-        "auth_method": "JWT",
-        "deployment": "AWS",
-        "required_pages": ["Login"],
-        "required_backend_modules": ["workspaces"],
-    }
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "backend/src/models/users.js" in paths, "User model should be auto-generated when auth is meaningful"
-
-
-def test_auth_auto_generates_user_model_python():
-    """JWT auth without 'user' module should auto-generate User model in Python/FastAPI."""
-    rules = {
-        "backend_framework": "FastAPI",
-        "frontend_framework": "Vue.js",
-        "database": "PostgreSQL",
-        "auth_method": "JWT",
-        "deployment": "Docker",
-        "required_pages": ["Login"],
-        "required_backend_modules": ["workspaces"],
-    }
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "app/models/user.py" in paths, "User model should be auto-generated when auth is meaningful in FastAPI"
-
-
-def test_auth_user_model_resolves_dependency():
-    """When auth is meaningful, the User model dependency should be resolved."""
-    rules = {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "PostgreSQL",
-        "auth_method": "JWT",
-        "deployment": "AWS",
-        "required_pages": ["Login"],
-        "required_backend_modules": ["workspaces"],
-    }
-    plan = generate_build_plan(rules)
-    from coding_agent.dependency_graph import validate_graph
-    errors = validate_graph(plan)
-    assert not errors, f"Unresolved dependencies: {errors}"
-
-
-def test_no_duplicate_user_model_when_users_in_modules():
-    """When 'users' is in modules, the model comes from the module loop â€” no duplicate."""
-    rules = {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "MongoDB",
-        "auth_method": "JWT",
-        "deployment": "AWS",
-        "required_pages": ["Login"],
-        "required_backend_modules": ["users", "posts"],
-    }
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    user_model_count = sum(1 for p in paths if p == "backend/src/models/users.js")
-    assert user_model_count == 1, f"Expected exactly 1 users model, got {user_model_count}"
-
-
-def test_auth_user_model_not_added_without_auth():
-    """When auth is not meaningful, no User model should be auto-generated."""
-    rules = {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "PostgreSQL",
-        "auth_method": "None",
-        "deployment": "AWS",
-        "required_pages": ["Home"],
-        "required_backend_modules": ["workspaces"],
-    }
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    assert "backend/src/models/users.js" not in paths
-    assert "backend/src/middleware/auth.js" not in paths
-    assert "backend/src/routes/auth.js" not in paths
-
-
-# ---------------------------------------------------------------------------
-# Sample rule sets
-# ---------------------------------------------------------------------------
-
-
-def _node_react_postgres_rules():
-    return {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "PostgreSQL",
-        "auth_method": "JWT",
-        "deployment": "AWS",
-        "required_pages": ["Home", "Login", "Dashboard", "Settings"],
-        "required_backend_modules": ["workspaces", "projects", "tasks"],
-    }
-
-
-def _fastapi_vue_postgres_rules():
-    return {
-        "backend_framework": "FastAPI",
-        "frontend_framework": "Vue.js",
-        "database": "PostgreSQL",
-        "auth_method": "JWT",
-        "deployment": "Docker",
-        "required_pages": ["Home", "Dashboard", "Settings"],
-        "required_backend_modules": ["workspaces", "projects", "tasks"],
-    }
-
-
-def _spring_react_mysql_rules():
-    return {
-        "backend_framework": "Spring Boot",
-        "frontend_framework": "React",
-        "database": "MySQL",
-        "auth_method": "OAuth2",
-        "deployment": "AWS",
-        "required_pages": ["Home", "Dashboard", "Admin"],
-        "required_backend_modules": ["workspaces", "projects"],
-    }
-
-
-def _pm_rules():
-    return {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "PostgreSQL",
-        "auth_method": "JWT",
-        "deployment": "AWS",
-        "required_pages": [
-            "Workspaces", "Projects", "Boards", "Tasks",
-            "Activity", "Notifications",
-        ],
-        "required_backend_modules": [
-            "workspaces", "projects", "tasks",
-            "activity", "notifications",
-        ],
-    }
-
-
-def _node_react_mongo_rules():
-    return {
-        "backend_framework": "Node.js",
-        "frontend_framework": "React",
-        "database": "MongoDB",
-        "auth_method": "JWT",
-        "deployment": "AWS",
-        "required_pages": ["Home", "Dashboard"],
-        "required_backend_modules": ["users", "posts"],
-    }
-
-
-def test_fastapi_mongodb_uses_motor_shape_not_sqlalchemy():
-    rules = {
-        "backend_framework": "FastAPI",
-        "frontend_framework": "React",
-        "database": "MongoDB",
-        "auth_method": "JWT",
-        "deployment": "Docker",
-        "required_pages": ["Login"],
-        "required_backend_modules": ["todos"],
-    }
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    purposes = "\n".join(f["purpose"] for f in plan["files"])
-    assert "app/db/database.py" in paths
-    assert "app/db/base.py" not in paths
-    assert "seeds/seed.py" in paths
-    assert "src/config/mongodb.js" not in paths
-    assert "SQLAlchemy" not in purposes
-    assert "Motor" in purposes
-
-
-def test_express_no_auth_has_no_auth_artifacts():
-    rules = {
-        "backend_framework": "Express.js",
-        "frontend_framework": "React",
-        "database": "PostgreSQL",
-        "auth_method": "None",
-        "deployment": "AWS",
-        "required_pages": ["Home"],
-        "required_backend_modules": ["items"],
-    }
-    plan = generate_build_plan(rules)
-    paths = [f["path"] for f in plan["files"]]
-    purposes = "\n".join(f["purpose"] for f in plan["files"])
-    assert "backend/src/middleware/auth.js" not in paths
-    assert "backend/src/routes/auth.js" not in paths
-    assert "backend/src/models/users.js" not in paths
-    assert "jsonwebtoken" not in purposes
-    assert "bcrypt" not in purposes

@@ -1,4 +1,7 @@
-"""Merge backend and frontend planning results into one final architecture payload."""
+"""Merge backend and frontend planning results into one final architecture payload.
+
+No hardcoded JWT/auth integration assumptions.
+"""
 
 from __future__ import annotations
 
@@ -13,12 +16,6 @@ def merge_backend_and_frontend(
     frontend_result: Dict[str, Any],
     validation_output: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Combine backend and frontend plans into one response.
-
-    If either plan failed, return an error payload with the successful side
-    attached as partial_results.
-    """
-
     backend_ok = _is_success(backend_result)
     frontend_ok = _is_success(frontend_result)
 
@@ -28,7 +25,6 @@ def merge_backend_and_frontend(
             failed_parts.append(f"backend: {backend_result.get('error', backend_result.get('reasoning', 'unknown error'))}")
         if not frontend_ok:
             failed_parts.append(f"frontend: {frontend_result.get('error', frontend_result.get('reasoning', 'unknown error'))}")
-
         return {
             "status": "error",
             "reasoning": "; ".join(failed_parts) if failed_parts else "One or more planning pipelines failed",
@@ -37,8 +33,6 @@ def merge_backend_and_frontend(
                 "backend": backend_result if backend_ok else None,
                 "frontend": frontend_result if frontend_ok else None,
             },
-            "backend_architecture": backend_result if backend_ok else None,
-            "frontend_architecture": frontend_result if frontend_ok else None,
         }
 
     backend_architecture = {
@@ -68,16 +62,13 @@ def merge_backend_and_frontend(
         "total_routes": frontend_result.get("total_routes", 0),
         "animations": frontend_result.get("animations", []),
         "accessibility": frontend_result.get("accessibility", {}),
-        "design_system": frontend_result.get("design_system", {}),
-        "breakpoints": frontend_result.get("breakpoints", {}),
         "routing": frontend_result.get("routing", {}),
-        "theme_support": frontend_result.get("theme_support", "light/dark"),
         "component_library": frontend_result.get("component_library", "shadcn/ui"),
         "reasoning": frontend_result.get("combined_reasoning", ""),
     }
 
     validation_block = _build_validation_block(validation_output)
-    integration_points = _build_integration_points(backend_architecture, frontend_architecture, validation_block)
+    integration_points = _build_integration_points(backend_architecture, frontend_architecture)
     combined_reasoning = _combine_reasoning(backend_result, frontend_result, validation_block)
     recommendations = _build_recommendations(validation_block, backend_architecture, frontend_architecture)
 
@@ -106,7 +97,6 @@ def _build_validation_block(validation_output: Dict[str, Any]) -> Dict[str, Any]
         "alignment_score": validation_output.get("alignment_score"),
         "feedback": validation_output.get("feedback", ""),
         "reasoning": validation_output.get("reasoning", ""),
-        "recommended_stack": validation_output.get("recommended_stack", {}),
     }
 
 
@@ -116,50 +106,25 @@ def _build_recommendations(
     frontend_architecture: Dict[str, Any],
 ) -> list[str]:
     recommendations = []
-
     missing_requirements = validation_block.get("missing_requirements", []) or []
     recommendations.extend([f"Address validation gap: {item}" for item in missing_requirements])
-
-    recommended_stack = validation_block.get("recommended_stack", {}) or {}
-    backend_stack = recommended_stack.get("backend", []) if isinstance(recommended_stack, dict) else []
-    frontend_stack = recommended_stack.get("frontend", []) if isinstance(recommended_stack, dict) else []
-
-    if backend_stack:
-        recommendations.append(f"Backend stack options to consider: {', '.join(backend_stack[:3])}")
-    if frontend_stack:
-        recommendations.append(f"Frontend stack options to consider: {', '.join(frontend_stack[:3])}")
-
     recommendations.append(
         f"Keep backend framework {backend_architecture.get('framework', 'Unknown')} aligned with frontend framework {frontend_architecture.get('framework', 'Unknown')}."
     )
-    recommendations.append("Use the shared validation result as the source of truth for API shape, auth, and deployment decisions.")
-
     return recommendations
 
 
 def _build_integration_points(
     backend_architecture: Dict[str, Any],
     frontend_architecture: Dict[str, Any],
-    validation_block: Dict[str, Any],
 ) -> list[str]:
     points = [
         "Backend REST API endpoints match frontend API calls",
-        "Authentication flow: frontend exchanges credentials for JWT and backend validates tokens",
         "Shared validation stack informs both backend and frontend design decisions",
     ]
 
     if backend_architecture.get("api_style") == "REST":
         points.append("Frontend consumes REST resources with predictable request/response contracts")
-
-    auth_method = backend_architecture.get("authentication", {}).get("method", "")
-    if "jwt" in auth_method.lower():
-        points.append("JWT-based session handling is aligned across frontend and backend")
-
-    if validation_block.get("user_stack", {}).get("realtime"):
-        points.append("Real-time updates can be implemented with WebSocket or SSE where needed")
-
-    if frontend_architecture.get("framework") == "Next.js":
-        points.append("Next.js routing and backend API routes can share deployment conventions")
 
     return points
 
@@ -177,7 +142,5 @@ def _combine_reasoning(
         f"Validated project type: {project_type}.",
         backend_reasoning,
         frontend_reasoning,
-        "The backend and frontend plans were generated from the same shared validation state, so the API surface, auth strategy, and UI structure stay aligned.",
     ]
-
     return " ".join(part for part in parts if part)

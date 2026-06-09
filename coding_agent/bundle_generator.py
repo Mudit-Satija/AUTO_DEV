@@ -1,8 +1,7 @@
-﻿"""Bundle Generator â€” generates multiple files per Qwen call using delimiter format.
+﻿"""Bundle Generator — groups files by their bundle assignment from the build plan.
 
-Groups a flat file list into bundles (backend, frontend, database, docs),
-sends one prompt per bundle, parses delimited responses, and falls back
-to single-file generation when a bundle fails validation.
+Uses build plan's `bundle` field as the source of truth for classification.
+Generates multiple files per LLM call using delimiter format.
 """
 
 import logging
@@ -13,88 +12,32 @@ from llm_client import CODER_MODEL, get_llm_response
 from coding_agent.file_generator import generate_file as generate_single_file
 from coding_agent.file_writer import write_file
 from coding_agent.file_registry import register_file
-from coding_agent.prompt_constraints import auth_is_enabled, build_prompt_constraints
+from coding_agent.prompt_constraints import build_prompt_constraints
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Grouping
-# ---------------------------------------------------------------------------
-
 BUNDLE_NAMES = ("backend", "frontend", "database", "docs")
+DEFAULT_MAX_BUNDLE_SIZE = 10
 
 
 def group_files_by_bundle(file_blueprints: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
-    """Classify a flat list of file blueprints into named bundles.
-
-    Returns a dict with keys "backend", "frontend", "database", "docs".
-    Each value is the subset of blueprints that belong to that bundle.
-    """
+    """Classify file blueprints into named bundles using the build plan's bundle field."""
     bundles: Dict[str, List[Dict[str, str]]] = {name: [] for name in BUNDLE_NAMES}
 
     for bp in file_blueprints:
-        bundle = _classify(bp)
-        bundles[bundle].append(bp)
+        bundle = bp.get("bundle", "backend")
+        if bundle in bundles:
+            bundles[bundle].append(bp)
+        else:
+            bundles["backend"].append(bp)
 
-    # Remove empty bundles
     return {k: v for k, v in bundles.items() if v}
-
-
-def _classify(blueprint: dict) -> str:
-    path = blueprint.get("path", "")
-    ftype = blueprint.get("type", "")
-    purpose = blueprint.get("purpose", "")
-
-    # Documentation
-    if ftype == "documentation" or path == "README.md":
-        return "docs"
-
-    # Database — classified by explicit type + path patterns only,
-    # never by purpose keywords that technology-bleed (e.g. "mongo",
-    # "database" appear in backend-file purposes like "MongoDB database
-    # connection" or "User database model").
-    if ftype == "database":
-        return "database"
-    if path.startswith("migrations/") or path.startswith("seeds/"):
-        return "database"
-    if "migration" in purpose.lower() or "seed" in purpose.lower():
-        return "database"
-
-    # Frontend
-    if ftype == "page":
-        return "frontend"
-    if "frontend" in purpose.lower() or "react" in purpose.lower() or "vue" in purpose.lower():
-        return "frontend"
-    if path.startswith("src/pages/") or path.startswith("src/views/"):
-        return "frontend"
-    if path in ("vite.config.js", "index.html", "postcss.config.js", "src/main.jsx", "src/main.js",
-                 "src/App.jsx", "src/App.vue", "src/App.css", "src/router/index.js",
-                 "package_frontend.json"):
-        return "frontend"
-    if "services/api" in path:
-        return "frontend"
-
-    # Backend (catch-all — most files land here)
-    return "backend"
-
-
-# ---------------------------------------------------------------------------
-# Partitioning
-# ---------------------------------------------------------------------------
-
-DEFAULT_MAX_BUNDLE_SIZE = 10
 
 
 def partition_blueprints(
     blueprints: List[Dict[str, str]],
     max_size: int = DEFAULT_MAX_BUNDLE_SIZE,
 ) -> List[List[Dict[str, str]]]:
-    """Split a list of blueprints into groups of at most *max_size*.
-
-    Blueprints are sorted by path first so that related files (same
-    directory) stay together.  Returns a single group when the input
-    already fits within *max_size*.
-    """
     sorted_bps = sorted(blueprints, key=lambda bp: bp.get("path", ""))
 
     if len(sorted_bps) <= max_size:
@@ -107,11 +50,6 @@ def group_and_partition_files(
     file_blueprints: List[Dict[str, str]],
     max_size: int = DEFAULT_MAX_BUNDLE_SIZE,
 ) -> Dict[str, List[Dict[str, str]]]:
-    """Classify files into bundles and partition large bundles into chunks.
-
-    Bundle names are suffixed with ``_1``, ``_2`` etc. when the original
-    bundle exceeds *max_size*.  Small bundles keep their original name.
-    """
     bundles = group_files_by_bundle(file_blueprints)
     result: Dict[str, List[Dict[str, str]]] = {}
 
@@ -126,31 +64,29 @@ def group_and_partition_files(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Prompt building
-# ---------------------------------------------------------------------------
-
-
-def build_bundle_prompt(bundle_name: str, file_blueprints: List[Dict[str, str]], project_rules: dict) -> str:
-    """Build a single prompt instructing Qwen to generate all files in a bundle."""
+def build_bundle_prompt(
+    bundle_name: str,
+    file_blueprints: List[Dict[str, str]],
+    project_rules: dict,
+) -> str:
     backend_fw = project_rules.get("backend_framework", "Unknown")
     frontend_fw = project_rules.get("frontend_framework", "Unknown")
     database = project_rules.get("database", "Unknown")
-    auth_method = project_rules.get("auth_method", "Unknown")
+    srs = project_rules.get("srs", {})
 
     lines = [
         f"You are a code generation assistant. Generate the following {len(file_blueprints)} files for the {bundle_name} of a project.",
         "",
         "Project context:",
+        f"- Project: {srs.get('project_name', 'Untitled')}",
+        f"- Description: {srs.get('project_description', '')}",
         f"- Backend framework: {backend_fw}",
         f"- Frontend framework: {frontend_fw}",
         f"- Database: {database}",
-        f"- Auth method: {auth_method}",
-        f"- Required backend modules: {', '.join(str(m) for m in project_rules.get('required_backend_modules', [])) or 'none'}",
-        f"- Required frontend pages: {', '.join(str(p) for p in project_rules.get('required_pages', [])) or 'none'}",
-        f"- Auth enabled: {'yes' if auth_is_enabled(auth_method) else 'no'}",
+        f"- SRS entities: {', '.join(e.get('name', '') for e in (srs.get('entities', []) or [])) or 'none'}",
+        f"- SRS pages: {', '.join(p.get('name', '') for p in (srs.get('pages', []) or [])) or 'none'}",
         "",
-        f"Use this exact delimiter format for each file (no JSON, no markdown, no explanations):",
+        "Use this exact delimiter format for each file (no JSON, no markdown, no explanations):",
         "",
         "===FILE: <path>===",
         "<file content here>",
@@ -160,7 +96,7 @@ def build_bundle_prompt(bundle_name: str, file_blueprints: List[Dict[str, str]],
     ]
 
     for i, bp in enumerate(file_blueprints, 1):
-        lines.append(f"{i}. Path: {bp.get('path', 'unknown')}  â€”  Purpose: {bp.get('purpose', '')}")
+        lines.append(f"{i}. Path: {bp.get('path', 'unknown')} — Purpose: {bp.get('purpose', '')}")
 
     lines.extend([
         "",
@@ -169,7 +105,7 @@ def build_bundle_prompt(bundle_name: str, file_blueprints: List[Dict[str, str]],
         "- Do NOT escape anything.",
         "- Do NOT wrap in markdown code blocks.",
         "- Do NOT add text before the first ===FILE or after the last ===END.",
-        "- Generate ALL listed files â€” do not skip any.",
+        "- Generate ALL listed files — do not skip any.",
         "- The code must be complete, functional, and follow best practices.",
         "- Return ONLY the delimiter-formatted content.",
         "- Each file may only import from other files that are EXPLICITLY listed in this prompt. Never import from unlisted paths.",
@@ -185,10 +121,6 @@ def build_bundle_prompt(bundle_name: str, file_blueprints: List[Dict[str, str]],
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# Parsing
-# ---------------------------------------------------------------------------
-
 DELIMITER_PATTERN = re.compile(
     r"===FILE:\s*(.+?)===\s*\n(.*?)\n===END===",
     re.DOTALL,
@@ -196,7 +128,6 @@ DELIMITER_PATTERN = re.compile(
 
 
 def parse_bundle_response(raw_text: str) -> Dict[str, str]:
-    """Parse ===FILE: path=== ... ===END=== blocks into {path: content}."""
     files = {}
     for match in DELIMITER_PATTERN.finditer(raw_text):
         path = match.group(1).strip()
@@ -205,25 +136,11 @@ def parse_bundle_response(raw_text: str) -> Dict[str, str]:
     return files
 
 
-# ---------------------------------------------------------------------------
-# Validation
-# ---------------------------------------------------------------------------
-
-
 def validate_bundle(parsed: Dict[str, str], expected_blueprints: List[Dict[str, str]]) -> Tuple[bool, List[str]]:
-    """Check that all expected files are present in the parsed output.
-
-    Returns (is_valid, list_of_missing_paths).
-    """
     expected_paths = {bp.get("path") for bp in expected_blueprints}
     present = set(parsed.keys())
     missing = sorted(expected_paths - present)
     return len(missing) == 0, missing
-
-
-# ---------------------------------------------------------------------------
-# Generation with fallback
-# ---------------------------------------------------------------------------
 
 
 def generate_bundle(
@@ -231,11 +148,6 @@ def generate_bundle(
     file_blueprints: List[Dict[str, str]],
     project_rules: dict,
 ) -> Dict[str, str]:
-    """Generate all files in a bundle via a single Qwen call.
-
-    Returns {path: content} for successfully parsed files.
-    May return fewer files than requested if parse misses some.
-    """
     prompt = build_bundle_prompt(bundle_name, file_blueprints, project_rules)
     logger.info(
         "Bundle [%s] prompt: %d chars, %d files",
@@ -265,26 +177,13 @@ def generate_bundle_with_fallback(
     output_dir: str,
     registry: dict,
 ) -> List[dict]:
-    """Try bundle generation; fall back to per-file for any missing files.
-
-    Args:
-        bundle_name: One of "backend", "frontend", "database", "docs".
-        file_blueprints: List of file blueprints for this bundle.
-        project_rules: Rules dict from rules_engine.
-        output_dir: Root directory for generated files.
-        registry: In-memory registry dict (mutated in place).
-
-    Returns:
-        List of metadata dicts from write_file(), one per file.
-    """
     written: List[dict] = []
 
-    # Attempt bundle generation
     parsed = generate_bundle(bundle_name, file_blueprints, project_rules)
     is_valid, missing = validate_bundle(parsed, file_blueprints)
 
     if is_valid:
-        logger.info("Bundle [%s] valid â€” all %d files present", bundle_name, len(file_blueprints))
+        logger.info("Bundle [%s] valid — all %d files present", bundle_name, len(file_blueprints))
         for bp in file_blueprints:
             path = bp.get("path", "unknown")
             content = parsed.get(path, "")
@@ -293,9 +192,8 @@ def generate_bundle_with_fallback(
             written.append(metadata)
         return written
 
-    # Fallback: generate missing files individually
     logger.warning(
-        "Bundle [%s] validation failed â€” missing %d files. Falling back to per-file generation.",
+        "Bundle [%s] validation failed — missing %d files. Falling back to per-file generation.",
         bundle_name,
         len(missing),
     )
@@ -313,6 +211,3 @@ def generate_bundle_with_fallback(
         written.append(metadata)
 
     return written
-
-
-

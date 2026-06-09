@@ -1,245 +1,357 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Send, MessageCircle } from "lucide-react";
+import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import { Download, Loader2, FileText, CheckCircle } from "lucide-react";
 
-interface Message {
-  id: string;
-  type: "user" | "agent";
-  text: string;
-  isTyping?: boolean;
-}
+type BackendOption = "Express.js" | "FastAPI" | "Frontend Only";
+type FrontendOption = "React" | "Vue";
+type DatabaseOption = "MongoDB" | "PostgreSQL" | "None";
 
-interface InteractiveChatProps {
-  onValidationComplete: (data: any) => void;
-  addLog: (type: string, text: string) => void;
-  phase: string;
-  onPlanArchitecture: (validationData: any) => Promise<void>;
-}
+export default function InteractiveChat() {
+  const [projectName, setProjectName] = useState("");
+  const [description, setDescription] = useState("");
+  const [pages, setPages] = useState("");
+  const [mainFlow, setMainFlow] = useState("");
+  const [entities, setEntities] = useState("");
+  const [backend, setBackend] = useState<BackendOption>("Express.js");
+  const [frontend, setFrontend] = useState<FrontendOption>("React");
+  const [database, setDatabase] = useState<DatabaseOption>("MongoDB");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationResult, setGenerationResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-export default function InteractiveChat({
-  onValidationComplete,
-  addLog,
-  phase,
-  onPlanArchitecture,
-}: InteractiveChatProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      type: "agent",
-      text: "Hey! I'm your AI architecture assistant. Tell me about your project idea, and I'll help you plan the perfect full-stack architecture.",
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [conversation, setConversation] = useState<Array<{ role: string; content: string }>>([]);
-  const [validationData, setValidationData] = useState<any>(null);
-  const [projectPrompt, setProjectPrompt] = useState<string>("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isFrontendOnly = backend === "Frontend Only";
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const parsed = useMemo(() => {
+    const pagesList = pages
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
 
-  const addMessage = (type: "user" | "agent", text: string, isTyping = false) => {
-    setMessages((prev) => [...prev, {
-      id: Math.random().toString(),
-      type,
-      text,
-      isTyping,
-    }]);
-  };
+    const entityList = entities
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [name, ...rest] = line.split(":").map((s) => s.trim());
+        const fields = rest
+          .join(":")
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        return { name, fields };
+      })
+      .filter((e) => e.name);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    if (validationData) {
-      addMessage("agent", "Validation is complete, so I am using that stack to generate the architecture now.");
-      return;
-    }
+    const stack = isFrontendOnly
+      ? frontend
+      : `${backend} + ${frontend} + ${database}`;
 
-    // Add user message
-    addMessage("user", input);
-    const userInput = input;
-    setInput("");
-    setIsLoading(true);
+    return { projectName: projectName || "Untitled", pages: pagesList, entities: entityList, stack };
+  }, [projectName, pages, entities, backend, frontend, database, isFrontendOnly]);
 
-    if (!projectPrompt) {
-      setProjectPrompt(userInput);
-    }
-
-    // Update conversation history
-    const updatedConversation = [
-      ...conversation,
-      { role: "user", content: userInput },
-    ];
-    setConversation(updatedConversation);
-
-    // Instead of hardcoded replies, call backend /chat to get Llama-generated responses for conversational intents
-    const lowerInput = userInput.toLowerCase();
-    const conversationalTriggers = ["confused", "i'm confused", "im confused", "what would you suggest", "what do you suggest", "suggest"];
-    const isConversational = conversationalTriggers.some((t) => lowerInput.includes(t));
-
-    if (isConversational) {
-      try {
-        addLog("info", "→ Asking Llama for conversational reply...");
-        const chatResp = await fetch("http://localhost:8000/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: userInput, conversation: updatedConversation }),
-        });
-
-        if (!chatResp.ok) throw new Error("Chat API error");
-        const json = await chatResp.json();
-        const reply = json.reply || "Sorry, I couldn't generate a reply.";
-        addMessage("agent", reply);
-        setConversation((prev) => [...prev, { role: "agent", content: reply }]);
-        setIsLoading(false);
-        return;
-      } catch (err) {
-        addLog("error", `✗ Chat error: ${err}`);
-        addMessage("agent", "Sorry, I couldn't reach the chat service. Please try again.");
-        setIsLoading(false);
-        return;
-      }
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsGenerating(true);
+    setError(null);
+    setGenerationResult(null);
 
     try {
-      // Call interactive validation endpoint
-      addLog("info", "→ Sending validation request...");
+      const body = {
+        project_name: projectName,
+        description,
+        pages: parsed.pages,
+        main_flow: mainFlow,
+        entities_fields: entities,
+        backend_framework: backend,
+        frontend_framework: frontend,
+        database: isFrontendOnly ? "None" : database,
+      };
 
-      const response = await fetch("http://localhost:8000/validate-interactive", {
+      const res = await fetch("http://localhost:8000/generate-from-srs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: projectPrompt || userInput,
-          conversation: updatedConversation,
-        }),
+        body: JSON.stringify(body),
       });
 
-      if (!response.ok) throw new Error("API error");
-
-      const data = await response.json();
-      addLog("info", "← Response received");
-
-      if (data.status === "success") {
-        addMessage("agent", data.feedback || "Validation complete.");
-        setConversation((prev) => [
-          ...prev,
-          { role: "agent", content: data.feedback || "Validation complete." },
-        ]);
-        addLog("success", "✓ Validation complete!");
-        setValidationData(data);
-        onValidationComplete(data);
-        
-        setTimeout(() => {
-          onPlanArchitecture(data);
-        }, 1000);
-      } else if (data.current_question) {
-        addMessage("agent", data.current_question);
-        setConversation((prev) => [
-          ...prev,
-          { role: "agent", content: data.current_question },
-        ]);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || `Generation failed (${res.status})`);
       }
-    } catch (error) {
-      addLog("error", `✗ Error: ${error}`);
-      addMessage("agent", "Sorry, I encountered an error. Please try again.");
+
+      const data = await res.json();
+      setGenerationResult(data);
+    } catch (err: any) {
+      setError(err.message || "Unknown error");
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const isDisabled = isLoading || phase !== "chat" || Boolean(validationData);
+  const renderOption = <T extends string>(
+    label: T,
+    selected: T,
+    onSelect: (v: T) => void,
+  ) => (
+    <button
+      key={label}
+      type="button"
+      onClick={() => onSelect(label)}
+      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+        selected === label
+          ? "bg-blue-600 text-white shadow-sm"
+          : "bg-slate-800/50 text-slate-400 hover:text-slate-200 border border-slate-700/50"
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
-    <div className="bg-slate-950/30 backdrop-blur-sm h-full max-h-[720px] flex flex-col text-slate-200">
-      {/* Chat Header */}
-      <div className="px-4 py-3 flex items-center gap-2">
-        <MessageCircle size={18} className="text-blue-300" />
-        <h2 className="font-semibold text-slate-100">Interactive Chat</h2>
-      </div>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+      {/* ── Left: Form ── */}
+      <div className="glass-dark p-6 overflow-y-auto max-h-[720px]">
+        <motion.h2
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-lg font-semibold gradient-text mb-6"
+        >
+          SRS Generator
+        </motion.h2>
 
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
-        <AnimatePresence>
-          {messages.map((msg) => (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Project Name */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Project Name</label>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="e.g. GST Manager"
+              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 transition-colors"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Project Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe what your project does..."
+              rows={3}
+              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
+            />
+          </div>
+
+          {/* Pages */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Pages</label>
+            <textarea
+              value={pages}
+              onChange={(e) => setPages(e.target.value)}
+              placeholder="One per line or comma separated"
+              rows={3}
+              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
+            />
+          </div>
+
+          {/* Main Flow */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Main Flow</label>
+            <textarea
+              value={mainFlow}
+              onChange={(e) => setMainFlow(e.target.value)}
+              placeholder={`Describe what a user does step by step.
+Example:
+1. User opens app and sees pending tasks
+2. User fills form to add a new task
+3. User clicks 'Mark Complete' on a task
+4. Task moves to Completed Tasks page`}
+              rows={3}
+              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
+            />
+          </div>
+
+          {/* Entities & Fields */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Entities & Fields</label>
+            <textarea
+              value={entities}
+              onChange={(e) => setEntities(e.target.value)}
+              placeholder={`List your data models and their fields.
+Example:
+Task: title, description, completed, createdAt
+User: name, email, password`}
+              rows={3}
+              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
+            />
+            <p className="text-xs text-slate-500 mt-1">These become your database models. Each line = one model.</p>
+          </div>
+
+          {/* Backend */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Backend</label>
+            <div className="flex gap-2 flex-wrap">
+              {(["Express.js", "FastAPI", "Frontend Only"] as const).map((o) =>
+                renderOption(o, backend, setBackend),
+              )}
+            </div>
+          </div>
+
+          {/* Frontend */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Frontend</label>
+            <div className="flex gap-2">
+              {(["React", "Vue"] as const).map((o) =>
+                renderOption(o, frontend, setFrontend),
+              )}
+            </div>
+          </div>
+
+          {/* Database (hidden when Frontend Only) */}
+          {!isFrontendOnly && (
             <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
             >
-              <div
-                className={`max-w-xs lg:max-w-sm px-3 py-2 rounded-md shadow-sm ${
-                  msg.type === "user"
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-800/90 text-slate-200"
-                }`}
-              >
-                <p className="text-sm leading-relaxed">
-                  {msg.isTyping ? (
-                    <span className="animate-typing inline-block">
-                      {msg.text.slice(0, 20)}...
-                    </span>
-                  ) : (
-                    msg.text
-                  )}
-                </p>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Database</label>
+              <div className="flex gap-2">
+                {(["MongoDB", "PostgreSQL", "None"] as const).map((o) =>
+                  renderOption(o, database, setDatabase),
+                )}
               </div>
             </motion.div>
-          ))}
-        </AnimatePresence>
+          )}
 
-        {isLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex gap-2"
+          {/* Error */}
+          {error && (
+            <div className="text-red-400 text-xs bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={isGenerating}
+            className="w-full btn-primary flex items-center justify-center gap-2 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ delay: i * 0.1, repeat: Infinity, duration: 0.8 }}
-                className="w-2 h-2 bg-blue-400 rounded-full"
-              />
-            ))}
-          </motion.div>
-        )}
+            {isGenerating ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <FileText size={16} />
+                Generate Project
+              </>
+            )}
+          </button>
 
-        <div ref={messagesEndRef} />
+          {/* Results: SRS quality + download */}
+          {generationResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 bg-slate-900/50 border border-slate-700/30 rounded-lg space-y-3"
+            >
+              {/* Score badge */}
+              {generationResult.srs_score !== undefined && (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
+                      generationResult.srs_score >= 71
+                        ? "bg-green-900/40 text-green-400 border border-green-700/40"
+                        : generationResult.srs_score >= 41
+                          ? "bg-yellow-900/40 text-yellow-400 border border-yellow-700/40"
+                          : "bg-red-900/40 text-red-400 border border-red-700/40"
+                    }`}
+                  >
+                    {generationResult.srs_score}/100
+                  </span>
+                  <span className="text-xs text-slate-400">SRS Quality</span>
+                </div>
+              )}
+
+              {/* Feedback */}
+              {generationResult.srs_feedback && (
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {generationResult.srs_feedback}
+                </p>
+              )}
+
+              {/* Missing items */}
+              {generationResult.srs_missing?.length > 0 && (
+                <div className="space-y-0.5">
+                  <p className="text-xs text-slate-500 font-medium">Suggestions:</p>
+                  {generationResult.srs_missing.map((item: string, i: number) => (
+                    <p key={i} className="text-xs text-slate-400 pl-2 border-l border-slate-700/50">
+                      {item}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <div className="pt-1">
+                <p className="text-xs text-slate-400 mb-2">
+                  <CheckCircle size={14} className="inline text-green-400 mr-1" />
+                  {generationResult.files_generated} files written
+                </p>
+                {generationResult?.zip_filename && (
+                  <a
+                    href={`http://localhost:8000/download/${generationResult.zip_filename}`}
+                    download
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors"
+                  >
+                    <Download size={14} /> Download ZIP
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </form>
       </div>
 
-      {/* Input */}
-      <div className="pt-3 px-3 pb-4">
-        <div className="flex gap-2 items-end">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isDisabled}
-            placeholder={validationData ? "Architecture planning is in progress..." : isDisabled ? "Waiting for validation..." : "Type your message..."}
-            className="flex-1 h-20 max-h-24 overflow-y-auto bg-transparent border border-slate-800/40 rounded-md px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 disabled:opacity-50 resize-none"
-            rows={2}
-          />
-          <button
-            onClick={handleSend}
-            disabled={isDisabled || !input.trim()}
-            className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send size={16} />
-          </button>
+      {/* ── Right: Live SRS Preview ── */}
+      <div className="glass-dark p-6 overflow-y-auto max-h-[720px]">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-5">
+          SRS Preview
+        </h3>
+
+        <div className="space-y-4 text-sm">
+          <div>
+            <span className="text-blue-300 font-medium">Project:</span>{" "}
+            <span className="text-slate-200">{parsed.projectName}</span>
+          </div>
+
+          {parsed.pages.length > 0 && (
+            <div>
+              <span className="text-blue-300 font-medium">Pages:</span>{" "}
+              <span className="text-slate-200">{parsed.pages.join(", ")}</span>
+            </div>
+          )}
+
+          {parsed.entities.length > 0 && (
+            <div>
+              <span className="text-blue-300 font-medium">Entities:</span>
+              <div className="mt-1 space-y-0.5">
+                {parsed.entities.map((e, i) => (
+                  <div key={i} className="text-slate-200">
+                    <span className="text-amber-300">{e.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-3 border-t border-slate-700/30">
+            <span className="text-blue-300 font-medium">Stack:</span>{" "}
+            <span className="text-slate-200">{parsed.stack}</span>
+          </div>
         </div>
-        <p className="text-xs text-slate-500 mt-2">Shift+Enter for new line</p>
       </div>
     </div>
   );
