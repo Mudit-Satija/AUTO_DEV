@@ -53,6 +53,17 @@ def generate_build_plan(project_rules: dict) -> dict:
         "requirements": [],
     })
 
+    # Frontend-only mode: skip all backend + database files
+    is_frontend_only = backend_fw in ("", "none", "frontend only")
+    has_backend = not is_frontend_only and bool(backend_fw)
+
+    if is_frontend_only:
+        files.extend(_build_frontend_config(frontend_fw, has_backend=False))
+        files.extend(_build_pages(frontend_fw, pages, entities, has_backend=False))
+        _wire_app_deps(files)
+        _assign_bundles(files)
+        return {"files": files}
+
     # Backend config files (tech stack infrastructure — minimal)
     files.extend(_build_backend_config(backend_fw, database))
 
@@ -61,9 +72,6 @@ def generate_build_plan(project_rules: dict) -> dict:
 
     # Backend flow-specific endpoints (non-CRUD operations from flow)
     files.extend(_build_flow_endpoints(backend_fw, database, flow, entities))
-
-    # Determine if a backend framework is configured
-    has_backend = bool(backend_fw)
 
     # Frontend config files
     files.extend(_build_frontend_config(frontend_fw, has_backend))
@@ -75,15 +83,7 @@ def generate_build_plan(project_rules: dict) -> dict:
     files.extend(_build_database_files(database, backend_fw, entities))
 
     # Dynamically connect frontend pages and styles to the main App component
-    app_bp = None
-    for f in files:
-        if f["path"] in ("frontend/src/App.jsx", "frontend/src/App.tsx", "frontend/src/App.vue"):
-            app_bp = f
-            break
-    if app_bp is not None:
-        page_paths = [f["path"] for f in files if f["type"] == "page"]
-        css_paths = [f["path"] for f in files if f["path"] in ("frontend/src/App.css", "frontend/src/index.css")]
-        app_bp["depends_on"] = css_paths + page_paths
+    _wire_app_deps(files)
 
     # Assign bundle
     for f in files:
@@ -310,7 +310,7 @@ def _build_entity_artifacts(
                 "source_page": "",
                 "source_entity": name,
                 "source_flow": "; ".join(entity_flows) if entity_flows else "",
-                "depends_on": [db_dep_file],
+                "depends_on": [],
                 "provides": [],
                 "requirements": ["model definition"],
             })
@@ -662,6 +662,23 @@ def _build_database_files(
         })
 
     return files
+
+
+def _wire_app_deps(files: List[Dict[str, Any]]) -> None:
+    app_bp = None
+    for f in files:
+        if f["path"] in ("frontend/src/App.jsx", "frontend/src/App.tsx", "frontend/src/App.vue"):
+            app_bp = f
+            break
+    if app_bp is not None:
+        page_paths = [f["path"] for f in files if f["type"] == "page"]
+        css_paths = [f["path"] for f in files if f["path"] in ("frontend/src/App.css", "frontend/src/index.css")]
+        app_bp["depends_on"] = css_paths + page_paths
+
+
+def _assign_bundles(files: List[Dict[str, Any]]) -> None:
+    for f in files:
+        f["bundle"] = _infer_bundle(f)
 
 
 def _infer_bundle(blueprint: dict) -> str:

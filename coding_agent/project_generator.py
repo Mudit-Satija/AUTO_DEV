@@ -259,6 +259,7 @@ def generate_project(
             logger.info("All post-generation validations passed")
             result["repair_attempts"] = attempt - 1
             result["all_validations_pass"] = True
+            post_process_generated_files(output_dir)
             return result
 
         logger.warning(
@@ -286,4 +287,30 @@ def generate_project(
             max_repair_attempts, total,
         )
 
+    post_process_generated_files(output_dir)
     return result
+
+
+def post_process_generated_files(output_dir: str) -> None:
+    """Fix common LLM code generation errors via string replacement.
+    Runs after all files are written and before zipping.
+    """
+    import glob as glob_mod
+
+    models_dir = output_dir.replace("\\", "/") + "/backend/src/models"
+    for filepath in glob_mod.glob(models_dir + "/*.js"):
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        original = content
+        content = content.replace(
+            "const mongoose = require('../config/database')",
+            "const mongoose = require('mongoose')",
+        )
+        content = content.replace(
+            "const mongoose = require('./config/database')",
+            "const mongoose = require('mongoose')",
+        )
+        if content != original:
+            logger.info("post_process: fixed mongoose import in %s", filepath)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)

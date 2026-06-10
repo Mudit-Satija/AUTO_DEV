@@ -1,72 +1,136 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
-import { Download, Loader2, FileText, CheckCircle } from "lucide-react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Download, Loader2, CheckCircle, FileText, RefreshCw, Layout, Database, GitBranch, Circle, Hourglass } from "lucide-react";
 
+type ComplexityOption = "Easy" | "Medium" | "Complex";
 type BackendOption = "Express.js" | "FastAPI" | "Frontend Only";
 type FrontendOption = "React" | "Vue";
-type DatabaseOption = "MongoDB" | "PostgreSQL" | "None";
+
+interface ProgressStage {
+  id: string;
+  label: string;
+  duration: number; // ms to stay on this stage
+}
+
+const STAGES: ProgressStage[] = [
+  { id: "parse", label: "Parsing Requirements", duration: 800 },
+  { id: "retrieve", label: "Retrieving Knowledge", duration: 700 },
+  { id: "plan", label: "Building Plan", duration: 1200 },
+  { id: "generate", label: "Generating Files", duration: 1500 },
+  { id: "validate", label: "Running Validation", duration: 900 },
+  { id: "package", label: "Packaging ZIP", duration: 600 },
+];
+
+type ProgressState = "pending" | "active" | "done";
+
+function parseList(raw: string): string[] {
+  return raw
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function StageRow({ label, state }: { label: string; state: ProgressState }) {
+  const iconMap: Record<ProgressState, React.ReactNode> = {
+    pending: <Circle size={14} className="text-slate-600" />,
+    active: <Loader2 size={14} className="text-blue-400 animate-spin" />,
+    done: <CheckCircle size={14} className="text-emerald-400" />,
+  };
+  const textMap: Record<ProgressState, string> = {
+    pending: "text-slate-600",
+    active: "text-slate-200",
+    done: "text-slate-300",
+  };
+
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <div className="w-5 flex justify-center flex-shrink-0">
+        {iconMap[state]}
+      </div>
+      <span className={`text-xs font-medium transition-colors duration-300 ${textMap[state]}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
 
 export default function InteractiveChat() {
   const [projectName, setProjectName] = useState("");
-  const [description, setDescription] = useState("");
-  const [pages, setPages] = useState("");
-  const [mainFlow, setMainFlow] = useState("");
-  const [entities, setEntities] = useState("");
-  const [backend, setBackend] = useState<BackendOption>("Express.js");
+  const [complexity, setComplexity] = useState<ComplexityOption>("Medium");
+  const [backend, setBackend] = useState<BackendOption>("Frontend Only");
   const [frontend, setFrontend] = useState<FrontendOption>("React");
-  const [database, setDatabase] = useState<DatabaseOption>("MongoDB");
+  const [pagesRaw, setPagesRaw] = useState("");
+  const [entitiesRaw, setEntitiesRaw] = useState("");
+  const [flowRaw, setFlowRaw] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentStageIndex, setCurrentStageIndex] = useState(-1);
   const [generationResult, setGenerationResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchStartRef = useRef<number>(0);
 
-  const isFrontendOnly = backend === "Frontend Only";
+  const parsedPages = useMemo(() => parseList(pagesRaw), [pagesRaw]);
+  const parsedEntities = useMemo(() => parseList(entitiesRaw), [entitiesRaw]);
+  const parsedFlow = useMemo(() => parseList(flowRaw), [flowRaw]);
 
-  const parsed = useMemo(() => {
-    const pagesList = pages
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+  const clearStageTimer = useCallback(() => {
+    if (stageTimerRef.current) {
+      clearTimeout(stageTimerRef.current);
+      stageTimerRef.current = null;
+    }
+  }, []);
 
-    const entityList = entities
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .map((line) => {
-        const [name, ...rest] = line.split(":").map((s) => s.trim());
-        const fields = rest
-          .join(":")
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-        return { name, fields };
-      })
-      .filter((e) => e.name);
+  // Advance progress stages while the fetch is in flight
+  const startProgress = useCallback(() => {
+    setCurrentStageIndex(0);
+    fetchStartRef.current = Date.now();
 
-    const stack = isFrontendOnly
-      ? frontend
-      : `${backend} + ${frontend} + ${database}`;
+    const advance = (index: number) => {
+      if (index >= STAGES.length) return;
+      setCurrentStageIndex(index);
+      stageTimerRef.current = setTimeout(() => {
+        advance(index + 1);
+      }, STAGES[index].duration);
+    };
 
-    return { projectName: projectName || "Untitled", pages: pagesList, entities: entityList, stack };
-  }, [projectName, pages, entities, backend, frontend, database, isFrontendOnly]);
+    advance(0);
+  }, []);
+
+  const stopProgress = useCallback(() => {
+    clearStageTimer();
+    setCurrentStageIndex(-1);
+  }, [clearStageTimer]);
+
+  useEffect(() => {
+    return () => clearStageTimer();
+  }, [clearStageTimer]);
+
+  useEffect(() => {
+    if (generationResult && resultRef.current) {
+      resultRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [generationResult]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGenerating(true);
     setError(null);
     setGenerationResult(null);
+    startProgress();
 
     try {
+      const isFrontendOnly = backend === "Frontend Only";
       const body = {
         project_name: projectName,
-        description,
-        pages: parsed.pages,
-        main_flow: mainFlow,
-        entities_fields: entities,
-        backend_framework: backend,
+        complexity: complexity.toLowerCase(),
+        backend_framework: isFrontendOnly ? "none" : backend,
         frontend_framework: frontend,
-        database: isFrontendOnly ? "None" : database,
+        pages: parsedPages,
+        entities: parsedEntities,
+        flow: parsedFlow,
       };
 
       const res = await fetch("http://localhost:8000/generate-from-srs", {
@@ -85,6 +149,7 @@ export default function InteractiveChat() {
     } catch (err: any) {
       setError(err.message || "Unknown error");
     } finally {
+      stopProgress();
       setIsGenerating(false);
     }
   };
@@ -98,259 +163,396 @@ export default function InteractiveChat() {
       key={label}
       type="button"
       onClick={() => onSelect(label)}
-      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-        selected === label
-          ? "bg-blue-600 text-white shadow-sm"
-          : "bg-slate-800/50 text-slate-400 hover:text-slate-200 border border-slate-700/50"
-      }`}
+      className={selected === label ? "btn-option-selected" : "btn-option"}
     >
       {label}
     </button>
   );
 
+  // Generic reset
+  const resetAll = () => {
+    setGenerationResult(null);
+    setError(null);
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
-      {/* ── Left: Form ── */}
-      <div className="glass-dark p-6 overflow-y-auto max-h-[720px]">
-        <motion.h2
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-lg font-semibold gradient-text mb-6"
-        >
-          SRS Generator
-        </motion.h2>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+      {/* ── Left: Configuration Panel ── */}
+      <div className="glass-panel flex flex-col overflow-hidden max-h-[780px]">
+        <div className="flex-1 overflow-y-auto p-5 pb-0">
+          <motion.h2
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-base font-semibold text-slate-100 mb-4"
+          >
+            Project Configuration
+          </motion.h2>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Project Name */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Project Name</label>
-            <input
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="e.g. GST Manager"
-              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 transition-colors"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Project Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe what your project does..."
-              rows={3}
-              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
-            />
-          </div>
-
-          {/* Pages */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Pages</label>
-            <textarea
-              value={pages}
-              onChange={(e) => setPages(e.target.value)}
-              placeholder="One per line or comma separated"
-              rows={3}
-              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
-            />
-          </div>
-
-          {/* Main Flow */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Main Flow</label>
-            <textarea
-              value={mainFlow}
-              onChange={(e) => setMainFlow(e.target.value)}
-              placeholder={`Describe what a user does step by step.
-Example:
-1. User opens app and sees pending tasks
-2. User fills form to add a new task
-3. User clicks 'Mark Complete' on a task
-4. Task moves to Completed Tasks page`}
-              rows={3}
-              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
-            />
-          </div>
-
-          {/* Entities & Fields */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Entities & Fields</label>
-            <textarea
-              value={entities}
-              onChange={(e) => setEntities(e.target.value)}
-              placeholder={`List your data models and their fields.
-Example:
-Task: title, description, completed, createdAt
-User: name, email, password`}
-              rows={3}
-              className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-400/30 focus:border-blue-400/30 resize-none transition-colors"
-            />
-            <p className="text-xs text-slate-500 mt-1">These become your database models. Each line = one model.</p>
-          </div>
-
-          {/* Backend */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Backend</label>
-            <div className="flex gap-2 flex-wrap">
-              {(["Express.js", "FastAPI", "Frontend Only"] as const).map((o) =>
-                renderOption(o, backend, setBackend),
-              )}
+          <form id="config-form" onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Project Name</label>
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="e.g. StudyHub"
+                className="input-field"
+              />
             </div>
-          </div>
 
-          {/* Frontend */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Frontend</label>
-            <div className="flex gap-2">
-              {(["React", "Vue"] as const).map((o) =>
-                renderOption(o, frontend, setFrontend),
-              )}
-            </div>
-          </div>
-
-          {/* Database (hidden when Frontend Only) */}
-          {!isFrontendOnly && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-            >
-              <label className="block text-sm font-medium text-slate-300 mb-2">Database</label>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">Complexity</label>
               <div className="flex gap-2">
-                {(["MongoDB", "PostgreSQL", "None"] as const).map((o) =>
-                  renderOption(o, database, setDatabase),
+                {(["Easy", "Medium", "Complex"] as const).map((o) =>
+                  renderOption(o, complexity, setComplexity),
                 )}
               </div>
-            </motion.div>
-          )}
-
-          {/* Error */}
-          {error && (
-            <div className="text-red-400 text-xs bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
-              {error}
             </div>
-          )}
 
-          {/* Submit */}
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">Backend</label>
+              <div className="flex gap-2 flex-wrap">
+                {(["Express.js", "FastAPI", "Frontend Only"] as const).map((o) =>
+                  renderOption(o, backend, setBackend),
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">Frontend</label>
+              <div className="flex gap-2">
+                {(["React", "Vue"] as const).map((o) =>
+                  renderOption(o, frontend, setFrontend),
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Pages</label>
+              <textarea
+                value={pagesRaw}
+                onChange={(e) => setPagesRaw(e.target.value)}
+                placeholder="One per line or comma separated"
+                rows={2}
+                className="input-field resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Entities</label>
+              <textarea
+                value={entitiesRaw}
+                onChange={(e) => setEntitiesRaw(e.target.value)}
+                placeholder="One per line or comma separated"
+                rows={2}
+                className="input-field resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Flow</label>
+              <textarea
+                value={flowRaw}
+                onChange={(e) => setFlowRaw(e.target.value)}
+                placeholder="One per line or comma separated"
+                rows={2}
+                className="input-field resize-none"
+              />
+            </div>
+
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="text-red-400 text-xs bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2"
+                >
+                  {error}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="h-2" />
+          </form>
+        </div>
+
+        {/* Sticky bottom area: generate button → progress → result */}
+        <div className="flex-shrink-0 border-t border-white/[0.06] bg-gradient-to-t from-slate-900/80 to-transparent px-5 py-4 space-y-3">
           <button
             type="submit"
+            form="config-form"
             disabled={isGenerating}
-            className="w-full btn-primary flex items-center justify-center gap-2 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-generate"
           >
             {isGenerating ? (
               <>
-                <Loader2 size={16} className="animate-spin" />
-                Generating...
+                <Loader2 size={18} className="animate-spin" />
+                <span>Generating...</span>
               </>
             ) : (
               <>
-                <FileText size={16} />
-                Generate Project
+                <span className="text-base">🚀</span>
+                <span>Generate Project</span>
               </>
             )}
           </button>
 
-          {/* Results: SRS quality + download */}
-          {generationResult && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-3 bg-slate-900/50 border border-slate-700/30 rounded-lg space-y-3"
-            >
-              {/* Score badge */}
-              {generationResult.srs_score !== undefined && (
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
-                      generationResult.srs_score >= 71
-                        ? "bg-green-900/40 text-green-400 border border-green-700/40"
-                        : generationResult.srs_score >= 41
-                          ? "bg-yellow-900/40 text-yellow-400 border border-yellow-700/40"
-                          : "bg-red-900/40 text-red-400 border border-red-700/40"
-                    }`}
-                  >
-                    {generationResult.srs_score}/100
-                  </span>
-                  <span className="text-xs text-slate-400">SRS Quality</span>
+          {/* Progress tracker */}
+          <AnimatePresence>
+            {isGenerating && currentStageIndex >= 0 && !generationResult && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-white/[0.03] border border-white/[0.06] rounded-lg px-4 py-3 overflow-hidden"
+              >
+                <div className="flex items-center gap-2 mb-2.5">
+                  <Hourglass size={12} className="text-blue-400" />
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Generation Progress</span>
                 </div>
-              )}
+                {STAGES.map((stage, i) => {
+                  let state: ProgressState = "pending";
+                  if (i < currentStageIndex) state = "done";
+                  else if (i === currentStageIndex) state = "active";
+                  return <StageRow key={stage.id} label={stage.label} state={state} />;
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-              {/* Feedback */}
-              {generationResult.srs_feedback && (
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {generationResult.srs_feedback}
-                </p>
-              )}
-
-              {/* Missing items */}
-              {generationResult.srs_missing?.length > 0 && (
-                <div className="space-y-0.5">
-                  <p className="text-xs text-slate-500 font-medium">Suggestions:</p>
-                  {generationResult.srs_missing.map((item: string, i: number) => (
-                    <p key={i} className="text-xs text-slate-400 pl-2 border-l border-slate-700/50">
-                      {item}
-                    </p>
-                  ))}
+          {/* Result card */}
+          <AnimatePresence>
+            {generationResult && (
+              <motion.div
+                ref={resultRef}
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                transition={{ duration: 0.3 }}
+                className="result-card"
+              >
+                <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle size={20} className="text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">Project Generated Successfully</p>
+                    <p className="text-xs text-slate-400">{generationResult.files_generated || 0} files generated</p>
+                  </div>
                 </div>
-              )}
 
-              <div className="pt-1">
-                <p className="text-xs text-slate-400 mb-2">
-                  <CheckCircle size={14} className="inline text-green-400 mr-1" />
-                  {generationResult.files_generated} files written
-                </p>
-                {generationResult?.zip_filename && (
-                  <a
-                    href={`http://localhost:8000/download/${generationResult.zip_filename}`}
-                    download
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors"
-                  >
-                    <Download size={14} /> Download ZIP
-                  </a>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white/[0.03] rounded-lg px-3 py-2.5 border border-white/[0.04]">
+                    <p className="text-xs text-slate-500 mb-0.5">Project Name</p>
+                    <p className="text-sm font-medium text-slate-200">{projectName || "Untitled"}</p>
+                  </div>
+                  <div className="bg-white/[0.03] rounded-lg px-3 py-2.5 border border-white/[0.04]">
+                    <p className="text-xs text-slate-500 mb-0.5">Validation</p>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle size={12} className="text-emerald-400" />
+                      <span className="text-sm font-medium text-emerald-400">Passed</span>
+                    </div>
+                  </div>
+                </div>
+
+                {generationResult.srs_score !== undefined && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-slate-400">SRS Quality Score</span>
+                      <span className="text-xs font-semibold text-slate-300">{generationResult.srs_score}/100</span>
+                    </div>
+                    <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${generationResult.srs_score}%` }}
+                        transition={{ duration: 0.8, delay: 0.2 }}
+                        className={`h-full rounded-full ${
+                          generationResult.srs_score >= 71
+                            ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
+                            : generationResult.srs_score >= 41
+                              ? "bg-gradient-to-r from-amber-500 to-amber-400"
+                              : "bg-gradient-to-r from-rose-500 to-rose-400"
+                        }`}
+                      />
+                    </div>
+                  </div>
                 )}
-              </div>
-            </motion.div>
-          )}
-        </form>
+
+                {generationResult.srs_feedback && (
+                  <p className="text-xs text-slate-400 leading-relaxed bg-white/[0.02] rounded-lg px-3 py-2 border border-white/[0.04]">
+                    {generationResult.srs_feedback}
+                  </p>
+                )}
+
+                {generationResult.srs_missing?.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium mb-1.5">Suggestions:</p>
+                    <div className="space-y-1">
+                      {generationResult.srs_missing.map((item: string, i: number) => (
+                        <p key={i} className="text-xs text-slate-400 pl-2 border-l border-amber-500/40">
+                          {item}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-1">
+                  {generationResult?.zip_filename && (
+                    <a
+                      href={`http://localhost:8000/download/${generationResult.zip_filename}`}
+                      download
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-cyan-500 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-lg shadow-blue-600/20 hover:shadow-blue-500/30 active:scale-[0.98]"
+                    >
+                      <Download size={16} />
+                      Download ZIP
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={resetAll}
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-200 rounded-lg text-sm font-medium transition-all duration-200 active:scale-[0.98]"
+                  >
+                    <RefreshCw size={16} />
+                    Generate Again
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* ── Right: Live SRS Preview ── */}
-      <div className="glass-dark p-6 overflow-y-auto max-h-[720px]">
-        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-5">
-          SRS Preview
-        </h3>
-
-        <div className="space-y-4 text-sm">
+      {/* ── Right: SRS Preview ── */}
+      <div className="glass-panel-alt p-5 overflow-y-auto max-h-[780px]">
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+            <FileText size={13} className="text-blue-400" />
+          </div>
           <div>
-            <span className="text-blue-300 font-medium">Project:</span>{" "}
-            <span className="text-slate-200">{parsed.projectName}</span>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">SRS Preview</h3>
+            <p className="text-[10px] text-slate-600 mt-0.5">Software Requirements Specification</p>
           </div>
+        </div>
 
-          {parsed.pages.length > 0 && (
-            <div>
-              <span className="text-blue-300 font-medium">Pages:</span>{" "}
-              <span className="text-slate-200">{parsed.pages.join(", ")}</span>
-            </div>
-          )}
-
-          {parsed.entities.length > 0 && (
-            <div>
-              <span className="text-blue-300 font-medium">Entities:</span>
-              <div className="mt-1 space-y-0.5">
-                {parsed.entities.map((e, i) => (
-                  <div key={i} className="text-slate-200">
-                    <span className="text-amber-300">{e.name}</span>
-                  </div>
-                ))}
+        <div className="space-y-5">
+          {projectName || parsedPages.length > 0 || parsedEntities.length > 0 || parsedFlow.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white/[0.03] rounded-lg px-3 py-2 border border-white/[0.04]">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Project</p>
+                  <p className="text-sm font-medium text-slate-200 truncate">{projectName || "Untitled"}</p>
+                </div>
+                <div className="bg-white/[0.03] rounded-lg px-3 py-2 border border-white/[0.04]">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Stack</p>
+                  <p className="text-sm font-medium text-slate-200 truncate">{frontend} + {backend === "Frontend Only" ? "None" : backend}</p>
+                </div>
+                <div className="bg-white/[0.03] rounded-lg px-3 py-2 border border-white/[0.04]">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Complexity</p>
+                  <p className="text-sm font-medium text-slate-200">{complexity}</p>
+                </div>
+                <div className="bg-white/[0.03] rounded-lg px-3 py-2 border border-white/[0.04]">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Items</p>
+                  <p className="text-sm font-medium text-slate-200">{parsedPages.length + parsedEntities.length + parsedFlow.length}</p>
+                </div>
               </div>
-            </div>
-          )}
 
-          <div className="pt-3 border-t border-slate-700/30">
-            <span className="text-blue-300 font-medium">Stack:</span>{" "}
-            <span className="text-slate-200">{parsed.stack}</span>
-          </div>
+              <div className="divider-subtle" />
+
+              {parsedPages.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-6 h-6 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                      <Layout size={12} className="text-blue-400" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-300">Pages</span>
+                    <span className="text-[10px] text-slate-600 bg-white/[0.03] px-1.5 py-0.5 rounded">{parsedPages.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {parsedPages.map((page, i) => (
+                      <motion.span
+                        key={i}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="tag-chip"
+                      >
+                        <Layout size={10} className="text-blue-400/60" />
+                        {page}
+                      </motion.span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {parsedEntities.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-6 h-6 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                      <Database size={12} className="text-emerald-400" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-300">Entities</span>
+                    <span className="text-[10px] text-slate-600 bg-white/[0.03] px-1.5 py-0.5 rounded">{parsedEntities.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {parsedEntities.map((entity, i) => (
+                      <motion.span
+                        key={i}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="tag-chip"
+                      >
+                        <Database size={10} className="text-emerald-400/60" />
+                        {entity}
+                      </motion.span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {parsedFlow.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <div className="w-6 h-6 rounded-md bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                      <GitBranch size={12} className="text-purple-400" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-300">Flow</span>
+                    <span className="text-[10px] text-slate-600 bg-white/[0.03] px-1.5 py-0.5 rounded">{parsedFlow.length}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {parsedFlow.map((flow, i) => (
+                      <motion.span
+                        key={i}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.03 }}
+                        className="tag-chip"
+                      >
+                        <GitBranch size={10} className="text-purple-400/60" />
+                        {flow}
+                      </motion.span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-12 px-4"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/[0.06] flex items-center justify-center mb-4">
+                <FileText size={24} className="text-slate-500" />
+              </div>
+              <p className="text-sm text-slate-400 font-medium mb-1">No specification yet</p>
+              <p className="text-xs text-slate-600 text-center max-w-xs">
+                Fill in the form to see a live preview of your specification.
+              </p>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

@@ -147,3 +147,6 @@ def validate_requirements(project_dir: str, build_plan: dict) -> dict:
                 })
 
     return {"success": len(errors) == 0, "errors": errors}
+
+
+

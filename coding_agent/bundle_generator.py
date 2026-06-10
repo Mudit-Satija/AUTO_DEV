@@ -1,4 +1,4 @@
-﻿"""Bundle Generator — groups files by their bundle assignment from the build plan.
+"""Bundle Generator — groups files by their bundle assignment from the build plan.
 
 Uses build plan's `bundle` field as the source of truth for classification.
 Generates multiple files per LLM call using delimiter format.
@@ -115,8 +115,10 @@ def build_bundle_prompt(
 
     if "frontend" in bundle_name:
         lines.append("- Use Vite environment variables (import.meta.env.VITE_*), not process.env.REACT_APP_*.")
-        lines.append("- The api.js service must use axios and import.meta.env.VITE_API_BASE_URL for the base URL.")
-        lines.append("- The api.js service must use export default api (default export). All page files must import it with: import api from '../services/api' (no braces, no named import).")
+        lines.append("- The api.js service: const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL }); export default api;")
+        lines.append("- All page files must import api with: import api from '../services/api'")
+        lines.append("- Pages use api directly: api.get('/products'), api.post('/products', body), api.put('/products/:id', body), api.delete('/products/:id')")
+        lines.append("- Do NOT create named export wrappers like 'productApi' or 'orderApi' in api.js. Pages call api.get() directly with the endpoint path.")
 
     return "\n".join(lines)
 

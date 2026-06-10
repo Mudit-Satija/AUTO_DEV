@@ -1,4 +1,4 @@
-﻿"""Prompt Builder — converts file blueprints into deterministic prompts.
+"""Prompt Builder — converts file blueprints into deterministic prompts.
 
 No hardcoded auth routes, no hardcoded framework templates.
 Prompts are driven entirely by blueprint specs and SRS lineage.
@@ -97,6 +97,12 @@ def build_file_prompt(
         "- Code must be complete and functional.",
     ])
 
+    # Model files — must import mongoose from npm package, not from config
+    if "/models/" in file_path and file_path.endswith(".js"):
+        lines.append("")
+        lines.append("- Import mongoose with: const mongoose = require('mongoose')")
+        lines.append("- Do NOT import from config/database")
+
     # Add import constraints based on build plan dependencies
     if all_blueprints:
         bp_by_path = {bp["path"]: bp for bp in all_blueprints}
@@ -115,6 +121,22 @@ def build_file_prompt(
                 else:
                     lines.append(f"- {dep_path}")
 
+    # Page-specific code quality rules
+    if file_type == "page":
+        lines.append("")
+        lines.append("CRITICAL PAGE CONSTRAINTS — violating these causes the app to crash:")
+        lines.append("- This file is at frontend/src/pages/<name>.jsx. Any relative import path starts from frontend/src/pages/, NOT from frontend/src/.")
+        lines.append("- Do NOT import App.css or any CSS file. './App.css' from this location resolves to frontend/src/pages/App.css which does not exist. Only App.jsx (at src/App.jsx) imports './App.css' correctly because its path is src/App.jsx. If you import CSS here, the app crashes with a module-not-found error.")
+        lines.append("- In import statements, do NOT append file extensions (.js, .jsx, .ts, .tsx) to local imports. Use './Component' not './Component.jsx'. Vite resolves extensions automatically.")
+        lines.append("- Every variable you use must be declared with useState or const. Never reference a variable that is not declared in this component.")
+        lines.append("- Every function you call (like handleAddEvent, handleDelete) must be defined in this component before it is used.")
+        lines.append("- Every onChange handler must reference a useState setter that is declared at the top of the component.")
+        lines.append("- Before writing JSX, write all useState declarations first, then all handler functions, then return the JSX.")
+        lines.append("- Never use <a href> for internal navigation — it causes a full page reload, breaks the SPA, and is considered a bug. Always use Link from react-router-dom for internal navigation.")
+        lines.append("- Never use React.Fragment, React.Suspense, or any React.X property in JSX. If you need a fragment, use <>...</> shorthand, or use <div>. Import React as a default import only if you use React.X syntax.")
+        lines.append("- Do NOT read localStorage or sessionStorage directly in the component function body. Any side effect (reading/writing localStorage, API calls, timers) must be wrapped in a useEffect hook.")
+        lines.append("- Check your code mentally before returning: every identifier used in JSX must be defined above it.")
+
     lines.extend(build_prompt_constraints(project_rules, [file_blueprint]))
 
     if spec:
@@ -123,3 +145,4 @@ def build_file_prompt(
         lines.extend(_serialize_spec(spec))
 
     return "\n".join(lines)
+

@@ -39,47 +39,101 @@ app.add_middleware(
 
 @app.post("/generate-from-srs")
 async def generate_from_srs(request: dict) -> dict:
-    """Generate project from SRS document with knowledge retrieval.
+    """Generate project from flat SRS fields with knowledge retrieval.
 
-    Expects JSON matching the SRSDocument schema:
+    Expects flat JSON:
     {
-        "project_name": "...",
-        "project_description": "...",
-        "complexity": "intermediate",
-        "pages": [{"name": "...", "purpose": "...", "entities": [...]}],
-        "flow": [{"name": "...", "steps": [...], "entities": [...]}],
-        "entities": [{"name": "...", "fields": [...], "description": "..."}],
-        "roles": [...],
-        "tech_stack": {"backend": "Express.js", "frontend": "React", "database": "MongoDB"},
-        "requirements": [{"id": "REQ-001", "description": "..."}]
-    }
-
-    Returns:
-    {
-        "files_generated": 22,
-        "knowledge_retrieved": {"architecture": 1, "ui": 1, "patterns": 2},
-        "zip_filename": "project_123.zip"
+        "project_name": "StudyHub",
+        "complexity": "medium",
+        "frontend_framework": "React",
+        "pages": ["Dashboard", "Courses"],
+        "entities": ["Course", "Assignment"],
+        "flow": ["Create Course", "Edit Course"]
     }
     """
     try:
-        srs = {
-            "project_name": request.get("project_name", "Untitled"),
-            "project_description": request.get("project_description", ""),
-            "complexity": request.get("complexity", "intermediate"),
-            "pages": request.get("pages", []),
-            "flow": request.get("flow", []),
-            "entities": request.get("entities", []),
-            "roles": request.get("roles", []),
-            "tech_stack": request.get("tech_stack", {}),
-            "requirements": request.get("requirements", []),
-        }
+        project_name = request.get("project_name", "Untitled")
+        complexity = request.get("complexity", "intermediate")
+        backend_framework = request.get("backend_framework", "").strip().lower()
+        frontend_framework = request.get("frontend_framework", "React")
+
+        pages_raw = request.get("pages", []) or []
+        entities_raw = request.get("entities", []) or []
+        flow_raw = request.get("flow", []) or []
+
+        # Detect frontend-only mode
+        is_frontend_only = backend_framework in ("", "none", "frontend only")
+
+        # Convert string[] -> object format for downstream pipeline
+        pages = []
+        for p in pages_raw:
+            if isinstance(p, str) and p.strip():
+                pages.append({"name": p.strip(), "purpose": "", "entities": []})
+            elif isinstance(p, dict):
+                pages.append(p)
+
+        entities = []
+        for e in entities_raw:
+            if isinstance(e, str) and e.strip():
+                entities.append({"name": e.strip(), "fields": ["name", "description", "createdAt"], "description": ""})
+            elif isinstance(e, dict):
+                entities.append(e)
+
+        flow = []
+        for f in flow_raw:
+            if isinstance(f, str) and f.strip():
+                flow.append({"name": f.strip(), "steps": [], "entities": []})
+            elif isinstance(f, dict):
+                flow.append(f)
+
+        if is_frontend_only:
+            page_names = [p.get("name", "") if isinstance(p, dict) else str(p) for p in pages_raw]
+            srs = {
+                "project_name": project_name,
+                "project_description": "",
+                "complexity": complexity,
+                "pages": pages,
+                "flow": flow,
+                "entities": entities,
+                "roles": [],
+                "tech_stack": {"frontend": frontend_framework},
+                "requirements": [],
+            }
+            project_rules = {
+                "backend_framework": "none",
+                "frontend_framework": frontend_framework,
+                "database": "none",
+                "auth_method": "",
+                "required_backend_modules": [],
+                "required_pages": page_names,
+                "srs": srs,
+            }
+        else:
+            tech_stack = {
+                "backend": backend_framework if backend_framework else "Express.js",
+                "frontend": frontend_framework,
+                "database": "MongoDB",
+            }
+            srs = {
+                "project_name": project_name,
+                "project_description": "",
+                "complexity": complexity,
+                "pages": pages,
+                "flow": flow,
+                "entities": entities,
+                "roles": [],
+                "tech_stack": tech_stack,
+                "requirements": [],
+            }
+            project_rules = build_project_rules(srs, tech_stack)
 
         logger.info(
-            "SRS generation: project=%s pages=%d entities=%d flows=%d",
+            "SRS generation: project=%s pages=%d entities=%d flows=%d backend=%s",
             srs["project_name"],
             len(srs["pages"]),
             len(srs["entities"]),
             len(srs["flow"]),
+            project_rules.get("backend_framework", "none"),
         )
 
         # 1. Knowledge retrieval
@@ -90,11 +144,7 @@ async def generate_from_srs(request: dict) -> dict:
             knowledge_summary,
         )
 
-        # 2. Build project rules from SRS
-        tech_stack = srs.get("tech_stack", {})
-        project_rules = build_project_rules(srs, tech_stack)
-
-        # 3. Attach knowledge to project_rules for the coding agent
+        # 2. Attach knowledge to project_rules for the coding agent
         project_rules["knowledge"] = knowledge
 
         # 4. Generate build plan

@@ -1,0 +1,1 @@
+{"project_name": "ShopManager", "complexity": "medium", "backend_framework": "Express.js", "frontend_framework": "React", "pages": ["Products", "Orders", "Dashboard"], "entities": ["Product", "Order"], "flow": ["View all products", "Add product", "View orders", "View dashboard"]}
