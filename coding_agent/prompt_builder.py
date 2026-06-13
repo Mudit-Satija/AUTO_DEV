@@ -139,6 +139,27 @@ def build_file_prompt(
 
     lines.extend(build_prompt_constraints(project_rules, [file_blueprint]))
 
+    # seedData.js specific constraints — must export single default object
+    if "seedData.js" in file_path:
+        lines.append("")
+        lines.append("CRITICAL SEEDDATA CONSTRAINTS — violating this causes import errors in all pages:")
+        lines.append("- This file must export a SINGLE default export with this shape:")
+        lines.append("  export default {")
+        lines.append("    <entity1_plural>: [ ...array of entity1 objects... ],")
+        lines.append("    <entity2_plural>: [ ...array of entity2 objects... ]")
+        lines.append("  };")
+        lines.append("- Do NOT use named exports (export const seedX = ...).")
+        lines.append("- Use exactly ONE 'export default { ... }' statement.")
+
+    # Page files in frontend-only projects: import seedData correctly
+    is_frontend_only = backend_fw in ("", "none", "frontend only")
+    if file_type == "page" and is_frontend_only:
+        lines.append("")
+        lines.append("CRITICAL SEEDDATA IMPORT CONSTRAINTS:")
+        lines.append("- Import as: import seedData from '../data/seedData'")
+        lines.append("- Access arrays as: seedData.<entityPlural> (e.g., seedData.recipes)")
+        lines.append("- Do NOT use named imports like { seedEvents, seedRegistrations }")
+
     if spec:
         lines.append("")
         lines.append("File contract — generate exactly this:")
