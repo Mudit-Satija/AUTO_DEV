@@ -1,0 +1,147 @@
+{
+  "backend/.env": {
+    "purpose": "Environment variables for backend",
+    "type": "env",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\.env"
+  },
+  "backend/.gitignore": {
+    "purpose": "Git ignore rules for Node.js backend",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\.gitignore"
+  },
+  "backend/package.json": {
+    "purpose": "Node.js dependencies \u2014 must include express, mongoose, dotenv, cors",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\package.json"
+  },
+  "backend/src/app.js": {
+    "purpose": "Express application setup \u2014 middleware, route mounting, server start",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\app.js"
+  },
+  "backend/src/config/database.js": {
+    "purpose": "Database connection setup for mongodb",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\config\\database.js"
+  },
+  "backend/src/config/index.js": {
+    "purpose": "Configuration loader for environment variables",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\config\\index.js"
+  },
+  "backend/src/middleware/errorHandler.js": {
+    "purpose": "Global error handler middleware",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\middleware\\errorHandler.js"
+  },
+  "backend/src/models/budget.js": {
+    "purpose": "Budget data model for mongodb",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\models\\budget.js"
+  },
+  "backend/src/models/category.js": {
+    "purpose": "Category data model for mongodb",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\models\\category.js"
+  },
+  "backend/src/models/transaction.js": {
+    "purpose": "Transaction data model for mongodb",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\models\\transaction.js"
+  },
+  "backend/src/routes/budget.js": {
+    "purpose": "Budget API routes \u2014 CRUD + flow-specific endpoints",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\routes\\budget.js"
+  },
+  "backend/src/routes/category.js": {
+    "purpose": "Category API routes \u2014 CRUD + flow-specific endpoints",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\routes\\category.js"
+  },
+  "backend/src/routes/index.js": {
+    "purpose": "Route aggregator \u2014 mounts all entity route files under /api",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\routes\\index.js"
+  },
+  "backend/src/routes/transaction.js": {
+    "purpose": "Transaction API routes \u2014 CRUD + flow-specific endpoints",
+    "type": "module",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\backend\\src\\routes\\transaction.js"
+  },
+  "seeds/seed.js": {
+    "purpose": "MongoDB seed data for development",
+    "type": "database",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\seeds\\seed.js"
+  },
+  "README.md": {
+    "purpose": "Project overview and setup instructions for ExpenseFlow",
+    "type": "documentation",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\README.md"
+  },
+  "frontend/.env": {
+    "purpose": "Frontend environment variables",
+    "type": "env",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\.env"
+  },
+  "frontend/index.html": {
+    "purpose": "HTML entry point referencing /src/main.jsx",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\index.html"
+  },
+  "frontend/package.json": {
+    "purpose": "Frontend dependencies \u2014 react, react-dom, react-router-dom, axios, vite, @vitejs/plugin-react",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\package.json"
+  },
+  "frontend/src/App.css": {
+    "purpose": "Global CSS styles ",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\App.css"
+  },
+  "frontend/src/App.jsx": {
+    "purpose": "Root application component with router and styling wrapper",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\App.jsx"
+  },
+  "frontend/src/main.jsx": {
+    "purpose": "React entry point rendering Root component",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\main.jsx"
+  },
+  "frontend/src/pages/Analytics.jsx": {
+    "purpose": "Analytics page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\pages\\Analytics.jsx"
+  },
+  "frontend/src/pages/Budgets.jsx": {
+    "purpose": "Budgets page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\pages\\Budgets.jsx"
+  },
+  "frontend/src/pages/Dashboard.jsx": {
+    "purpose": "Dashboard page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\pages\\Dashboard.jsx"
+  },
+  "frontend/src/pages/Reports.jsx": {
+    "purpose": "Reports page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\pages\\Reports.jsx"
+  },
+  "frontend/src/pages/Transactions.jsx": {
+    "purpose": "Transactions page",
+    "type": "page",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\pages\\Transactions.jsx"
+  },
+  "frontend/src/services/api.js": {
+    "purpose": "API client using axios",
+    "type": "source",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\src\\services\\api.js"
+  },
+  "frontend/vite.config.js": {
+    "purpose": "Vite build configuration for React ",
+    "type": "config",
+    "absolute_path": "D:\\projects\\AUTO_DEV\\generated_outputs\\concurrency_test_w1\\frontend\\vite.config.js"
+  }
+}

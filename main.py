@@ -6,6 +6,7 @@ from llm_client import get_llm_response
 from coding_agent.project_generator import generate_project
 from coding_agent.build_plan import generate_build_plan
 from coding_agent.rules_engine import build_project_rules
+from coding_agent.metrics import get_metrics_collector, reset_metrics_collector
 from knowledge_retriever import retrieve_knowledge
 import logging
 import os
@@ -153,9 +154,12 @@ async def generate_from_srs(request: dict) -> dict:
         # 5. Generate project files
         timestamp = int(time.time())
         output_dir = f"generated_outputs/project_{timestamp}"
+
+        reset_metrics_collector()
         result = generate_project(build_plan, project_rules, output_dir)
 
         # 6. Create zip
+        zip_start = time.perf_counter()
         zip_filename = f"project_{timestamp}.zip"
         zip_path = os.path.join("generated_outputs", zip_filename)
         os.makedirs("generated_outputs", exist_ok=True)
@@ -165,6 +169,14 @@ async def generate_from_srs(request: dict) -> dict:
                     fpath = os.path.join(root_dir, fname)
                     arcname = os.path.relpath(fpath, output_dir)
                     zf.write(fpath, arcname)
+        zip_duration_ms = int((time.perf_counter() - zip_start) * 1000)
+
+        metrics = get_metrics_collector()
+        metrics.record_zip_time(zip_duration_ms)
+
+        metrics_summary = metrics.get_summary()
+        metrics_file = f"generated_outputs/metrics_{timestamp}.json"
+        metrics.save_to_file(metrics_file)
 
         logger.info(
             "Generation complete: %d files, %s, knowledge=%s",
@@ -172,12 +184,21 @@ async def generate_from_srs(request: dict) -> dict:
             zip_filename,
             knowledge_summary,
         )
+        logger.info(
+            "Pipeline metrics: bundles=%d, total_gen_time_ms=%d, validation_time_ms=%d, zip_time_ms=%d",
+            metrics_summary["pipeline_metrics"]["total_bundles"],
+            metrics_summary["pipeline_metrics"]["total_generation_time_ms"],
+            metrics_summary["pipeline_metrics"]["validation_time_ms"],
+            metrics_summary["pipeline_metrics"]["zip_creation_time_ms"],
+        )
 
         return {
             "files_generated": result["files_generated"],
             "knowledge_retrieved": knowledge_summary,
             "zip_filename": zip_filename,
             "all_validations_pass": result.get("all_validations_pass", True),
+            "metrics": metrics_summary,
+            "metrics_file": metrics_file,
         }
 
     except Exception as e:
@@ -208,6 +229,17 @@ async def model_info():
             "patterns": 7,
         },
     }
+
+
+@app.get("/metrics/{filename}")
+async def get_metrics(filename: str):
+    for candidate in ["generated_outputs", "generated_output", "."]:
+        base = Path(candidate)
+        if base.is_dir():
+            fpath = base / filename
+            if fpath.is_file():
+                return FileResponse(str(fpath), filename=filename)
+    raise HTTPException(status_code=404, detail=f"Metrics file {filename} not found")
 
 
 if __name__ == "__main__":

@@ -13,11 +13,12 @@ from coding_agent.file_generator import generate_file as generate_single_file
 from coding_agent.file_writer import write_file
 from coding_agent.file_registry import register_file
 from coding_agent.prompt_constraints import build_prompt_constraints
+from coding_agent.metrics import get_metrics_collector
 
 logger = logging.getLogger(__name__)
 
 BUNDLE_NAMES = ("backend", "frontend", "database", "docs")
-DEFAULT_MAX_BUNDLE_SIZE = 10
+DEFAULT_MAX_BUNDLE_SIZE = 6
 
 
 def group_files_by_bundle(file_blueprints: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
@@ -111,7 +112,8 @@ def build_bundle_prompt(
         "- Each file may only import from other files that are EXPLICITLY listed in this prompt. Never import from unlisted paths.",
     ])
 
-    lines.extend(build_prompt_constraints(project_rules, file_blueprints))
+    bundle_type = "frontend" if "frontend" in bundle_name else "backend" if "backend" in bundle_name else "database" if "database" in bundle_name else "docs"
+    lines.extend(build_prompt_constraints(project_rules, file_blueprints, bundle_type))
 
     if "frontend" in bundle_name:
         lines.append("- Use Vite environment variables (import.meta.env.VITE_*), not process.env.REACT_APP_*.")
@@ -150,7 +152,15 @@ def generate_bundle(
     file_blueprints: List[Dict[str, str]],
     project_rules: dict,
 ) -> Dict[str, str]:
+    metrics = get_metrics_collector()
+
     prompt = build_bundle_prompt(bundle_name, file_blueprints, project_rules)
+
+    bundle_type = "backend" if "backend" in bundle_name else "frontend" if "frontend" in bundle_name else "database" if "database" in bundle_name else "docs"
+
+    metrics.start_bundle(bundle_name, bundle_type, file_blueprints, CODER_MODEL)
+    metrics.record_prompt(prompt)
+
     logger.info(
         "Bundle [%s] prompt: %d chars, %d files",
         bundle_name,
@@ -169,6 +179,9 @@ def generate_bundle(
         len(file_blueprints),
     )
 
+    is_valid, missing = validate_bundle(parsed, file_blueprints)
+    metrics.end_bundle(is_valid, missing)
+
     return parsed
 
 
@@ -183,6 +196,15 @@ def generate_bundle_with_fallback(
 
     parsed = generate_bundle(bundle_name, file_blueprints, project_rules)
     is_valid, missing = validate_bundle(parsed, file_blueprints)
+
+    if not is_valid:
+        logger.warning(
+            "Bundle [%s] validation failed — missing %d files. Falling back to per-file generation.",
+            bundle_name,
+            len(missing),
+        )
+    else:
+        logger.info("Bundle [%s] valid — all %d files present", bundle_name, len(file_blueprints))
 
     if is_valid:
         logger.info("Bundle [%s] valid — all %d files present", bundle_name, len(file_blueprints))

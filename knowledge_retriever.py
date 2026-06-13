@@ -4,6 +4,8 @@ Maps SRS entities, pages, flows, and tech stack to knowledge files:
 - architecture/: tech-stack-specific best practices
 - ui/: frontend-framework-specific component libraries
 - patterns/: domain-specific patterns for entities/pages/flows
+
+Knowledge is now categorized by target bundle type for isolation.
 """
 
 import logging
@@ -15,24 +17,40 @@ logger = logging.getLogger(__name__)
 
 _KNOWLEDGE_DIR = Path(__file__).parent / "knowledge"
 
+# Architecture knowledge mapped by tech stack AND target bundle
 _STACK_TO_ARCHITECTURE = {
-    "react": "bulletproof_react.md",
-    "next": "bulletproof_react.md",
+    # Frontend architecture
+    "react": {"file": "bulletproof_react.md", "bundle": "frontend"},
+    "next": {"file": "bulletproof_react.md", "bundle": "frontend"},
     "vue": None,
     "angular": None,
-    "express": "node_best_practices.md",
-    "node": "node_best_practices.md",
-    "fastapi": "fastapi_best_practices.md",
-    "python": "fastapi_best_practices.md",
+    # Backend architecture
+    "express": {"file": "node_best_practices.md", "bundle": "backend"},
+    "node": {"file": "node_best_practices.md", "bundle": "backend"},
+    "fastapi": {"file": "fastapi_best_practices.md", "bundle": "backend"},
+    "python": {"file": "fastapi_best_practices.md", "bundle": "backend"},
     "django": None,
     "spring": None,
     "java": None,
-    "refine": "refine.md",
+    "refine": {"file": "refine.md", "bundle": "frontend"},
 }
 
+# UI knowledge - ONLY injected when explicitly requested, not by framework alone
+# Maps explicit UI library names to files
+_UI_LIBRARY_TO_FILE = {
+    "shadcn": "shadcn_ui.md",
+    "shadcn/ui": "shadcn_ui.md",
+    "tremor": "tremor.md",
+    "aceternity": "aceternity_ui.md",
+    "origin": "origin_ui.md",
+    "magic": "magic_ui.md",
+}
+
+# Framework defaults - NO automatic UI library injection
+# React alone does NOT trigger shadcn_ui.md
 _STACK_TO_UI = {
-    "react": "shadcn_ui.md",
-    "next": "shadcn_ui.md",
+    "react": None,
+    "next": None,
     "vue": None,
     "angular": None,
 }
@@ -45,6 +63,17 @@ _PATTERN_KEYWORDS = {
     "analytics.md": ["analytics", "metric", "dashboard", "report", "chart", "kpi", "cohort", "funnel"],
     "dashboard.md": ["dashboard", "kpi", "metric", "chart", "widget"],
     "crud.md": [],
+}
+
+# Pattern to bundle mapping
+_PATTERN_TO_BUNDLE = {
+    "crm.md": "backend",
+    "blog.md": "frontend",
+    "ecommerce.md": "fullstack",
+    "inventory.md": "backend",
+    "analytics.md": "frontend",
+    "dashboard.md": "frontend",
+    "crud.md": "fullstack",
 }
 
 
@@ -87,16 +116,37 @@ def _match_entity_overlap(srs_entities: List[Dict], pattern_file: str, keywords:
     return overlap / len(srs_entity_names)
 
 
+def _detect_ui_libraries(srs: dict) -> List[str]:
+    """Detect explicitly requested UI libraries from SRS."""
+    text = (
+        srs.get("project_name", "")
+        + " "
+        + srs.get("project_description", "")
+        + " "
+        + " ".join(p.get("name", "") for p in srs.get("pages", []))
+        + " "
+        + " ".join(e.get("name", "") for e in srs.get("entities", []))
+        + " "
+        + " ".join(f.get("name", "") for f in srs.get("flow", []))
+    ).lower()
+
+    detected = []
+    for lib_name in _UI_LIBRARY_TO_FILE.keys():
+        if lib_name in text:
+            detected.append(lib_name)
+    return detected
+
+
 def retrieve_knowledge(srs: dict) -> dict:
-    """Retrieve relevant knowledge files for a given SRS.
+    """Retrieve relevant knowledge files for a given SRS, categorized by bundle.
 
     Args:
         srs: SRS dict with keys: project_name, project_description, complexity,
              pages, flow, entities, roles, tech_stack, requirements.
 
     Returns:
-        Dict with keys: architecture, ui, patterns, each containing
-        knowledge file content as a list of {file, content} dicts.
+        Dict with keys: frontend, backend, database, docs, each containing
+        knowledge file content as a list of {file, content, bundle} dicts.
     """
     tech_stack = srs.get("tech_stack", {})
     if not isinstance(tech_stack, dict):
@@ -109,37 +159,40 @@ def retrieve_knowledge(srs: dict) -> dict:
     srs_pages = srs.get("pages", []) or []
 
     result = {
-        "architecture": [],
-        "ui": [],
-        "patterns": [],
+        "frontend": [],
+        "backend": [],
+        "database": [],
+        "docs": [],
     }
 
-    # Architecture knowledge — select by backend/frontend
-    arch_hits = set()
-    for stack_key, arch_file in _STACK_TO_ARCHITECTURE.items():
-        if arch_file and stack_key in backend:
-            arch_hits.add(arch_file)
-    for stack_key, arch_file in _STACK_TO_ARCHITECTURE.items():
-        if arch_file and stack_key in frontend:
-            arch_hits.add(arch_file)
-    for arch_file in sorted(arch_hits):
-        content = _load_knowledge_file(f"architecture/{arch_file}")
-        if content:
-            result["architecture"].append({"file": arch_file, "content": content})
-            logger.info("Retrieved architecture knowledge: %s", arch_file)
+    # Architecture knowledge — select by tech stack and assign to correct bundle
+    for stack_key, arch_info in _STACK_TO_ARCHITECTURE.items():
+        if not arch_info:
+            continue
+        arch_file = arch_info["file"]
+        target_bundle = arch_info["bundle"]
+        
+        # Check if this stack key matches backend or frontend
+        matches_backend = stack_key in backend
+        matches_frontend = stack_key in frontend
+        
+        if (target_bundle == "backend" and matches_backend) or (target_bundle == "frontend" and matches_frontend):
+            content = _load_knowledge_file(f"architecture/{arch_file}")
+            if content:
+                result[target_bundle].append({"file": arch_file, "content": content, "bundle": target_bundle})
+                logger.info("Retrieved architecture knowledge for %s: %s", target_bundle, arch_file)
 
-    # UI knowledge — select by frontend framework
-    ui_hits = set()
-    for stack_key, ui_file in _STACK_TO_UI.items():
-        if ui_file and stack_key in frontend:
-            ui_hits.add(ui_file)
-    for ui_file in sorted(ui_hits):
-        content = _load_knowledge_file(f"ui/{ui_file}")
-        if content:
-            result["ui"].append({"file": ui_file, "content": content})
-            logger.info("Retrieved UI knowledge: %s", ui_file)
+    # UI knowledge — ONLY when explicitly requested in SRS
+    ui_libraries = _detect_ui_libraries(srs)
+    for lib_name in ui_libraries:
+        ui_file = _UI_LIBRARY_TO_FILE.get(lib_name)
+        if ui_file:
+            content = _load_knowledge_file(f"ui/{ui_file}")
+            if content:
+                result["frontend"].append({"file": ui_file, "content": content, "bundle": "frontend", "ui_library": lib_name})
+                logger.info("Retrieved UI knowledge (explicit): %s", ui_file)
 
-    # Pattern knowledge — score and select by domain match
+    # Pattern knowledge — score and select by domain match, assign to bundle
     scored_patterns = []
     for pattern_file, keywords in _PATTERN_KEYWORDS.items():
         if not keywords:
@@ -152,21 +205,22 @@ def retrieve_knowledge(srs: dict) -> dict:
 
     scored_patterns.sort(reverse=True, key=lambda x: x[0])
 
-    # Select top patterns with score > 0.15
     for score, pattern_file in scored_patterns:
         if score > 0.15:
             content = _load_knowledge_file(f"patterns/{pattern_file}")
             if content:
-                result["patterns"].append({"file": pattern_file, "content": content, "score": round(score, 3)})
-                logger.info("Retrieved pattern knowledge: %s (score=%.3f)", pattern_file, score)
+                target_bundle = _PATTERN_TO_BUNDLE.get(pattern_file, "frontend")
+                result[target_bundle].append({"file": pattern_file, "content": content, "bundle": target_bundle, "score": round(score, 3)})
+                logger.info("Retrieved pattern knowledge for %s: %s (score=%.3f)", target_bundle, pattern_file, score)
         else:
             break
 
-    # If no pattern matched, try crud.md as generic fallback
-    if not result["patterns"]:
+    # Fallback: if no patterns matched, add crud.md to both frontend and backend
+    if not any(result[b] for b in ["frontend", "backend"] if any(e.get("file") == "crud.md" for e in result[b])):
         content = _load_knowledge_file("patterns/crud.md")
         if content:
-            result["patterns"].append({"file": "crud.md", "content": content, "score": 0.0})
+            for bundle in ["frontend", "backend"]:
+                result[bundle].append({"file": "crud.md", "content": content, "bundle": bundle, "score": 0.0})
             logger.info("Fallback to generic pattern: crud.md")
 
     return result

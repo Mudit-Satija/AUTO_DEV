@@ -198,6 +198,7 @@ def _summarize_knowledge(knowledge: dict) -> List[str]:
 def build_prompt_constraints(
     project_rules: dict,
     file_blueprints: Optional[List[dict]] = None,
+    bundle_type: str = "frontend",
 ) -> List[str]:
     backend_fw = (project_rules.get("backend_framework") or "").lower()
     frontend_fw = (project_rules.get("frontend_framework") or "").lower()
@@ -352,11 +353,27 @@ def build_prompt_constraints(
         ])
 
     # ── INCLUDE CSS REFERENCE + KNOWLEDGE BASE ──
-    if has_frontend:
+    if has_frontend and bundle_type == "frontend":
         knowledge = project_rules.get("knowledge", {})
-        knowledge_lines = _summarize_knowledge(knowledge)
+        if isinstance(knowledge, dict) and "frontend" in knowledge:
+            bundle_knowledge = knowledge.get("frontend", [])
+        else:
+            bundle_knowledge = knowledge.get("ui", []) + knowledge.get("patterns", []) + knowledge.get("architecture", [])
+        knowledge_lines = _summarize_knowledge({"ui": bundle_knowledge, "patterns": bundle_knowledge, "architecture": bundle_knowledge})
         lines.append("")
         lines.append("### REFERENCE — CSS classes, page layouts, and design conventions:")
         lines.extend(knowledge_lines)
+    elif bundle_type == "backend":
+        knowledge = project_rules.get("knowledge", {})
+        if isinstance(knowledge, dict) and "backend" in knowledge:
+            bundle_knowledge = knowledge.get("backend", [])
+        else:
+            bundle_knowledge = []
+        if bundle_knowledge:
+            lines.append("")
+            lines.append("### REFERENCE — Backend architecture and patterns:")
+            for entry in bundle_knowledge:
+                lines.append(f"\n--- {entry.get('file', 'unknown')} ---")
+                lines.append(entry.get("content", ""))
 
     return lines

@@ -12,12 +12,14 @@ that fail import, smoke, or requirement validation.
 
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from coding_agent.bundle_generator import generate_bundle_with_fallback, group_and_partition_files
 from coding_agent.dependency_graph import validate_graph, validate_imports
 from coding_agent.file_registry import register_file, save_registry
 from coding_agent.file_writer import write_file
+from coding_agent.metrics import get_metrics_collector
 from coding_agent.prompt_builder import build_file_prompt
 from coding_agent.requirement_validator import validate_requirements
 from coding_agent.smoke_test import run_smoke_tests
@@ -196,13 +198,17 @@ def generate_project(
             repair_attempts (int): how many repair rounds were executed
             all_validations_pass (bool): whether all post-gen checks passed
     """
+    metrics = get_metrics_collector()
     files = build_plan.get("files", [])
+
+    metrics.start_pipeline(len(files))
 
     # Phase 1: Pre-generation dependency graph validation
     dep_errors = validate_graph(build_plan)
     if dep_errors:
         msg = "Dependency Validation Failed\n\n" + "\n".join(dep_errors)
         logger.error(msg)
+        metrics.end_pipeline("Failed")
         raise ValueError(msg)
 
     registry: dict = {}
@@ -211,10 +217,11 @@ def generate_project(
     bundles = group_and_partition_files(files)
     logger.info(
         "Grouped %d files into %d bundles (max %d per bundle): %s",
-        len(files), len(bundles), 10, list(bundles.keys()),
+        len(files), len(bundles), 6, list(bundles.keys()),
     )
 
     if not bundles:
+        metrics.end_pipeline("Success")
         return {
             "files_generated": 0,
             "files_written": [],
@@ -235,10 +242,11 @@ def generate_project(
             name = future_map[future]
             try:
                 written_local, registry_local = future.result()
+                logger.info("Bundle [%s] completed: %d files written", name, len(written_local))
                 written.extend(written_local)
                 registry.update(registry_local)
             except Exception:
-                logger.exception("Bundle [%s] failed", name)
+                logger.exception("Bundle [%s] failed with exception", name)
 
     registry_path = None
     if registry:
@@ -254,12 +262,17 @@ def generate_project(
 
     # Auto-repair loop
     for attempt in range(1, max_repair_attempts + 1):
+        validation_start = time.perf_counter()
         errors_by_file = _collect_repair_errors(build_plan, project_rules, output_dir)
+        validation_duration_ms = int((time.perf_counter() - validation_start) * 1000)
+        metrics.record_validation_time(validation_duration_ms)
+
         if not errors_by_file:
             logger.info("All post-generation validations passed")
             result["repair_attempts"] = attempt - 1
             result["all_validations_pass"] = True
             post_process_generated_files(output_dir)
+            metrics.end_pipeline("Success")
             return result
 
         logger.warning(
@@ -277,7 +290,11 @@ def generate_project(
         result["registry_path"] = registry_path
 
     # Final validation after all repairs exhausted
+    validation_start = time.perf_counter()
     final_errors = _collect_repair_errors(build_plan, project_rules, output_dir)
+    validation_duration_ms = int((time.perf_counter() - validation_start) * 1000)
+    metrics.record_validation_time(validation_duration_ms)
+
     result["repair_attempts"] = max_repair_attempts
     result["all_validations_pass"] = not final_errors
     if final_errors:
@@ -288,6 +305,7 @@ def generate_project(
         )
 
     post_process_generated_files(output_dir)
+    metrics.end_pipeline("Success" if not final_errors else "Failed")
     return result
 
 

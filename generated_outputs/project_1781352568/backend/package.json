@@ -1,0 +1,22 @@
+{
+  "name": "expenseflow-backend",
+  "version": "1.0.0",
+  "description": "Backend for ExpenseFlow application",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "keywords": ["expense", "budget", "finance"],
+  "author": "ExpenseFlow Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.6.0",
+    "dotenv": "^16.4.1",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

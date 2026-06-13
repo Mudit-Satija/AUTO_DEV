@@ -8,9 +8,9 @@ NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "180"))
 
-# Default models for different tasks
-DEFAULT_MODEL = "meta/llama-3.1-8b-instruct"                    # Fast validation
-CODER_MODEL = "qwen/qwen3-next-80b-a3b-instruct"  # ✅ CORRECT
+    
+DEFAULT_MODEL = "meta/llama-3.1-8b-instruct"                   
+CODER_MODEL = "qwen/qwen3-next-80b-a3b-instruct"  
 PLANNER_MODEL = DEFAULT_MODEL
 
 print("=" * 60)
