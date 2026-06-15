@@ -218,6 +218,30 @@ def build_prompt_constraints(
                 lines.append("  Use crypto.randomUUID() for every new item's id field.")
                 lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
 
+    # For App.jsx/tsx bundles in frontend-only projects: route-to-props mapping
+    if is_frontend_only:
+        is_app_bundle = any("App.jsx" in bp.get("path", "") or "App.tsx" in bp.get("path", "") for bp in file_blueprints or [])
+        if is_app_bundle:
+            all_files = project_rules.get("all_files", []) or []
+            route_lines = [
+                "",
+                "CRITICAL — each page below expects these EXACT props from App.jsx. Do NOT omit any prop:",
+            ]
+            for bp in all_files:
+                bp_path = bp.get("path", "")
+                if "/pages/" in bp_path:
+                    bp_entity = (bp.get("source_entity") or "").strip()
+                    bp_page = (bp.get("source_page") or "").strip()
+                    if bp_entity:
+                        e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
+                        p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
+                        s_names = ["set" + e + "s" for e in e_names]
+                        props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
+                        comp_name = bp_page.replace(" ", "") if bp_page else "Page"
+                        route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
+            if len(route_lines) > 2:  # header + at least one page
+                lines.extend(route_lines)
+
     if db_kind == "mongo":
         lines.append("- Database is MongoDB: use MongoDB/Mongoose for Express or Motor for FastAPI. Do not generate pg, pg.Pool, PostgreSQL SQL, SQLAlchemy, Sequelize, Prisma, CREATE TABLE, or INSERT INTO code.")
         if model_files:
