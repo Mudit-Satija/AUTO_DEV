@@ -122,8 +122,9 @@ def build_bundle_prompt(
             lines.append(f"  {f.get('path', 'unknown')}{marker}")
         lines.append("")
         lines.append("You may ONLY import from files in the list above, or from standard npm packages")
-        lines.append("(react, react-dom, react-router-dom, axios, etc.).")
-        lines.append("Do NOT invent imports like '../services/', '../components/', '../utils/', or 'uuid'.")
+        lines.append("(react, react-dom, react-router-dom, etc.).")
+        lines.append("Do NOT invent imports from local paths like '../services/', '../components/', '../utils/'.")
+        lines.append("Well-known npm packages (react, react-dom, react-router-dom, uuid) are fine if genuinely needed.")
         lines.append("These directories/files do not exist in this project and will cause build errors.")
 
     bundle_type = "frontend" if "frontend" in bundle_name else "backend" if "backend" in bundle_name else "database" if "database" in bundle_name else "docs"

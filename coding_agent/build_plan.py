@@ -448,11 +448,12 @@ def _build_frontend_config(frontend_fw: str, has_backend: bool = True) -> List[D
                      "build": "vite build",
                      "preview": "vite preview",
                  },
-                 "dependencies": {
-                     "react": "^18.2.0",
-                     "react-dom": "^18.2.0",
-                     "react-router-dom": "^6.20.0",
-                 },
+                  "dependencies": {
+                      "react": "^18.2.0",
+                      "react-dom": "^18.2.0",
+                      "react-router-dom": "^6.20.0",
+                      "uuid": "^9.0.0",
+                  },
                  "devDependencies": {
                      "@vitejs/plugin-react": "^4.2.0",
                      "vite": "^5.0.0",

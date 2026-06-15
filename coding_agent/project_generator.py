@@ -350,6 +350,8 @@ def post_process_generated_files(output_dir: str) -> None:
     for filepath in glob_mod.glob(root + "/**/*.js*", recursive=True):
         if 'node_modules' in filepath:
             continue
+        # Normalize path separators (Windows glob returns backslashes)
+        norm_path = filepath.replace('\\', '/')
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
         original = content
@@ -374,7 +376,7 @@ def post_process_generated_files(output_dir: str) -> None:
 
         # 3. Strip CSS imports from page files only (pages/*.jsx)
         #    App.jsx and main.jsx legitimately import App.css; pages should not.
-        if '/pages/' in filepath and filepath.endswith('.jsx'):
+        if '/pages/' in norm_path and norm_path.endswith('.jsx'):
             content = re.sub(
                 r"^import\s+['\"]?[^'\"\n]*\.css['\"]?\s*;?\s*$",
                 '',
