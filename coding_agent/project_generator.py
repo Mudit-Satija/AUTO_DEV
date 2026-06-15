@@ -340,11 +340,18 @@ def post_process_generated_files(output_dir: str) -> None:
     - React Router v5 useHistory / history.push → v6 useNavigate / navigate
     - CSS imports in page files (App.css import in pages/*.jsx)
     - Mongoose import paths in backend models
+    - '../services/api' imports in frontend-only projects (safety net)
     """
     import glob as glob_mod
+    import os
     import re
 
     root = output_dir.replace("\\", "/")
+
+    # Check if this project has a real services/api.js (full-stack) or not (frontend-only)
+    api_js_path = os.path.join(output_dir, "frontend", "src", "services", "api.js")
+    api_ts_path = os.path.join(output_dir, "frontend", "src", "services", "api.ts")
+    has_api_file = os.path.exists(api_js_path) or os.path.exists(api_ts_path)
 
     # Fix all .js and .jsx files (skip node_modules)
     for filepath in glob_mod.glob(root + "/**/*.js*", recursive=True):
@@ -393,6 +400,17 @@ def post_process_generated_files(output_dir: str) -> None:
             "const mongoose = require('./config/database')",
             "const mongoose = require('mongoose')",
         )
+
+        # 5. Strip '../services/api' imports for frontend-only projects
+        #    (safety net: if services/api.js doesn't exist on disk, the
+        #     import is a hallucination; keep it if the file actually exists)
+        if not has_api_file:
+            content = re.sub(
+                r"^import\s+.*?from\s+['\"]\.\./services/api['\"]\s*;?\s*$",
+                '',
+                content,
+                flags=re.MULTILINE,
+            )
 
         if content != original:
             logger.info("post_process: fixed %s", filepath)
