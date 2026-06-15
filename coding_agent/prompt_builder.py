@@ -151,14 +151,22 @@ def build_file_prompt(
         lines.append("- Do NOT use named exports (export const seedX = ...).")
         lines.append("- Use exactly ONE 'export default { ... }' statement.")
 
-    # Page files in frontend-only projects: import seedData correctly
+    # Page files in frontend-only projects: concrete props + data flow
     is_frontend_only = backend_fw in ("", "none", "frontend only")
     if file_type == "page" and is_frontend_only:
-        lines.append("")
-        lines.append("CRITICAL SEEDDATA IMPORT CONSTRAINTS:")
-        lines.append("- Import as: import seedData from '../data/seedData'")
-        lines.append("- Access arrays as: seedData.<entityPlural> (e.g., seedData.recipes)")
-        lines.append("- Do NOT use named imports like { seedEvents, seedRegistrations }")
+        # Derive props from source_entity (e.g., "Recipe; Favorite" -> recipes, favorites)
+        if source_entity:
+            entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
+            prop_names = [e[0].lower() + e[1:] + "s" for e in entity_names]
+            setter_names = ["set" + e + "s" for e in entity_names]
+            props_str = ", ".join(f"{p}, {s}" for p, s in zip(prop_names, setter_names))
+            lines.append("")
+            lines.append(f"CRITICAL — App.jsx passes you these EXACT props: {{ {props_str} }}")
+            lines.append(f"Your function signature MUST be: function {source_page.replace(' ', '')}({{ {props_str} }})")
+            lines.append("Do NOT use useState for entity data — use the props directly.")
+            lines.append("Every mutation must update BOTH the setter AND localStorage in the same handler.")
+            lines.append("Use crypto.randomUUID() for new item IDs.")
+            lines.append("If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
 
     if spec:
         lines.append("")

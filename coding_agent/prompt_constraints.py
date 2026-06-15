@@ -201,6 +201,23 @@ def build_prompt_constraints(
         if deps:
             lines.append(f"- {bp.get('path', 'unknown')} may import only these local build-plan dependencies: {_csv(deps)}.")
 
+        # For frontend-only pages: tell the LLM exactly what props App.jsx passes
+        bp_path = bp.get("path", "")
+        if is_frontend_only and "/pages/" in bp_path:
+            source_entity = (bp.get("source_entity") or "").strip()
+            source_page = (bp.get("source_page") or "").strip()
+            if source_entity:
+                entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
+                prop_names = [e[0].lower() + e[1:] + "s" for e in entity_names]
+                setter_names = ["set" + e + "s" for e in entity_names]
+                props_str = ", ".join(f"{p}, {s}" for p, s in zip(prop_names, setter_names))
+                comp_name = source_page.replace(" ", "") if source_page else "PageName"
+                lines.append(f"- CRITICAL — App.jsx passes these EXACT props to {bp_path}: {{ {props_str} }}")
+                lines.append(f"  Function signature MUST be: function {comp_name}({{ {props_str} }})")
+                lines.append("  Do NOT use useState for entity data — use the props directly.")
+                lines.append("  Use crypto.randomUUID() for every new item's id field.")
+                lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
+
     if db_kind == "mongo":
         lines.append("- Database is MongoDB: use MongoDB/Mongoose for Express or Motor for FastAPI. Do not generate pg, pg.Pool, PostgreSQL SQL, SQLAlchemy, Sequelize, Prisma, CREATE TABLE, or INSERT INTO code.")
         if model_files:
@@ -322,9 +339,15 @@ def build_prompt_constraints(
     # ── CSS CLASS REFERENCE + KNOWLEDGE BASE ──
     # All bundles embed FULL knowledge file content (no summaries) for rich context.
     if bundle_type == "frontend":
-        lines.append("")
-        lines.append("### REFERENCE — CSS classes, page layouts, and design conventions:")
-        lines.extend(_summarize_knowledge({}))
+        if is_frontend_only:
+            # For frontend-only projects, the complete working example in KNOWLEDGE
+            # section below is the primary reference — skip verbose CSS boilerplate
+            lines.append("")
+            lines.append("### CSS — Use className values matching the patterns in the COMPLETE WORKING EXAMPLE below")
+        else:
+            lines.append("")
+            lines.append("### REFERENCE — CSS classes, page layouts, and design conventions:")
+            lines.extend(_summarize_knowledge({}))
 
     knowledge = project_rules.get("knowledge", {})
     if isinstance(knowledge, dict) and bundle_type in knowledge:
@@ -348,8 +371,8 @@ def build_prompt_constraints(
             "",
             "### FEW-SHOT EXAMPLES — follow these patterns exactly:",
             "",
-            "React Router v6 navigation (CORRECT — useNavigate, NOT useHistory):",
-            'import { useNavigate } from \'react-router-dom\';',
+            "React Router v6 imports (CORRECT — useNavigate, Link, NOT useHistory):",
+            "import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';",
             'const navigate = useNavigate();',
             '// ...',
             "navigate('/recipes');",
