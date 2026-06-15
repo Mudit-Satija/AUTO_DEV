@@ -196,6 +196,12 @@ def build_prompt_constraints(
     if page_files:
         lines.append(f"- Page/view files allowed in this prompt: {_csv(page_files)}.")
 
+    # CSS class reference — only these classes exist. Every className in JSX must come from this list.
+    if is_frontend_only:
+        css_classes = "app-wrapper, page-header, section, form-card, form-group, form-label, form-input, form-select, form-actions, navbar, navbar-brand, nav-links, nav-link, btn, btn-primary, btn-secondary, btn-danger, btn-sm, empty-state, account-card, account-name, account-balance, account-type, account-details, account-number, account-actions, transaction-card, transaction-type, transaction-amount, transaction-date, transaction-details, transaction-title, transaction-actions, transaction-category, transaction-status, items-grid, item-card, item-title, item-details, item-actions, stats-grid, stat-card, stat-title, stat-details, transfers-grid, transfer-card, transfer-title, transfer-details, transfer-status, accounts-grid, error-message, activity-item, activity-title, activity-date, recent-activity, upcoming-items, upcoming-item, upcoming-title, upcoming-date, section-header, page-wrapper, page-header h1, page-header p"
+        lines.append("")
+        lines.append(f"### AVAILABLE CSS CLASSES — use only these. Do NOT invent custom CSS classes: {css_classes}")
+
     for bp in file_blueprints or []:
         deps = [str(dep) for dep in bp.get("depends_on", [])]
         if deps:
@@ -217,6 +223,12 @@ def build_prompt_constraints(
                 lines.append("  Do NOT use useState for entity data — use the props directly.")
                 lines.append("  Use crypto.randomUUID() for every new item's id field.")
                 lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
+                lines.append("  Form <input> values MUST come from a local useState, NOT from props. Never do value={prop.field}.")
+                lines.append("  For fields named type, category, status, currency, role, priority, or level: use <select> dropdown, not <input>.")
+                lines.append("  If you use useState(prop) for filtering/search, add a useEffect to re-sync when prop changes.")
+                lines.append("  Never use array[0] or array[index] directly in render without checking array.length first. Props start empty on first render.")
+                lines.append("  Do NOT add useEffect or localStorage logic in this file. App.jsx already handles all localStorage. You only call the setter props (setAccounts, etc.) on mutations.")
+                lines.append("  Do NOT add seed data in this file. App.jsx handles seeding. You receive data via props.")
 
     # For App.jsx/tsx bundles in frontend-only projects: route-to-props mapping
     if is_frontend_only:
@@ -241,6 +253,9 @@ def build_prompt_constraints(
                         route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
             if len(route_lines) > 2:  # header + at least one page
                 lines.extend(route_lines)
+
+            lines.append("")
+            lines.append("CRITICAL — every <Link to=\"/X\"> in the navbar MUST have a matching <Route path=\"/X\">. If a nav link points to \"/overview\", there must be <Route path=\"/overview\" ... />. Both must be present.")
 
     if db_kind == "mongo":
         lines.append("- Database is MongoDB: use MongoDB/Mongoose for Express or Motor for FastAPI. Do not generate pg, pg.Pool, PostgreSQL SQL, SQLAlchemy, Sequelize, Prisma, CREATE TABLE, or INSERT INTO code.")
