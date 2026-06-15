@@ -96,8 +96,26 @@ def build_bundle_prompt(
         "Files to generate:",
     ]
 
+    is_frontend_only = (project_rules.get("backend_framework") or "").lower() in ("", "none", "frontend only")
     for i, bp in enumerate(file_blueprints, 1):
-        lines.append(f"{i}. Path: {bp.get('path', 'unknown')} — Purpose: {bp.get('purpose', '')}")
+        bp_path = bp.get("path", "")
+        purpose = bp.get("purpose", "")
+        if is_frontend_only and "/pages/" in bp_path:
+            bp_entity = (bp.get("source_entity") or "").strip()
+            if bp_entity:
+                e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
+                p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
+                s_names = ["set" + e + "s" for e in e_names]
+                props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
+                lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
+                lines.append(f"   CRITICAL — Props passed by App.jsx: {{{props_str}}}. Function signature MUST be: function {bp.get('source_page', 'Page').replace(' ', '')}({{{props_str}}}).")
+                lines.append(f"   CRITICAL — Do NOT add useEffect or localStorage/seed data in this file. App.jsx handles all persistence. You only call setter props on mutations.")
+                lines.append(f"   CRITICAL — Form <input> values MUST come from local useState, NOT from props. Use <select> for type/category/status/currency fields.")
+                lines.append(f"   CRITICAL — Use crypto.randomUUID() for every new item id. Never use array[0] without checking .length first.")
+            else:
+                lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
+        else:
+            lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
 
     lines.extend([
         "",
@@ -227,21 +245,28 @@ def generate_bundle_with_fallback(
 ) -> List[dict]:
     written: List[dict] = []
 
-    parsed = generate_bundle(bundle_name, file_blueprints, project_rules)
-    is_valid, missing = validate_bundle(parsed, file_blueprints)
+    # Separate static and dynamic blueprints
+    static_bps = [bp for bp in file_blueprints if bp.get("static_content") is not None]
+    dynamic_bps = [bp for bp in file_blueprints if bp.get("static_content") is None]
 
-    if not is_valid:
-        logger.warning(
-            "Bundle [%s] validation failed — missing %d files. Falling back to per-file generation.",
-            bundle_name,
-            len(missing),
-        )
-    else:
-        logger.info("Bundle [%s] valid — all %d files present", bundle_name, len(file_blueprints))
+    # Process static blueprints immediately
+    for bp in static_bps:
+        path = bp.get("path", "unknown")
+        content = bp.get("static_content", "")
+        metadata = write_file({"path": path, "content": content}, output_dir)
+        register_file(registry, bp, metadata)
+        written.append(metadata)
+        logger.info("Static file written: %s (%d bytes)", path, metadata.get("size", 0))
+
+    if not dynamic_bps:
+        return written
+
+    parsed = generate_bundle(bundle_name, dynamic_bps, project_rules)
+    is_valid, missing = validate_bundle(parsed, dynamic_bps)
 
     if is_valid:
-        logger.info("Bundle [%s] valid — all %d files present", bundle_name, len(file_blueprints))
-        for bp in file_blueprints:
+        logger.info("Bundle [%s] valid — all %d dynamic files present", bundle_name, len(dynamic_bps))
+        for bp in dynamic_bps:
             path = bp.get("path", "unknown")
             content = parsed.get(path, "")
             metadata = write_file({"path": path, "content": content}, output_dir)
@@ -250,11 +275,11 @@ def generate_bundle_with_fallback(
         return written
 
     logger.warning(
-        "Bundle [%s] validation failed — missing %d files. Falling back to per-file generation.",
+        "Bundle [%s] validation failed — missing %d dynamic files. Falling back to per-file generation.",
         bundle_name,
         len(missing),
     )
-    for bp in file_blueprints:
+    for bp in dynamic_bps:
         path = bp.get("path", "unknown")
         if path in parsed:
             content = parsed[path]

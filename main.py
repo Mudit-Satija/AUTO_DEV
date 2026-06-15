@@ -156,7 +156,7 @@ async def generate_from_srs(request: dict) -> dict:
         output_dir = f"generated_outputs/project_{timestamp}"
 
         reset_metrics_collector()
-        result = generate_project(build_plan, project_rules, output_dir)
+        result = generate_project(build_plan, project_rules, output_dir, max_repair_attempts=0)
 
         # 6. Create zip
         zip_start = time.perf_counter()

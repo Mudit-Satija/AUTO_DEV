@@ -188,6 +188,15 @@ def retrieve_knowledge(srs: dict) -> dict:
                 result[target_bundle].append({"file": arch_file, "content": content, "bundle": target_bundle})
                 logger.info("Retrieved architecture knowledge for %s: %s", target_bundle, arch_file)
 
+    # Database knowledge — ONLY for the database bundle
+    database_choice = (tech_stack.get("database") or "").lower()
+    has_database = database_choice not in ("", "none", "no database")
+    if has_database:
+        db_content = _load_knowledge_file("patterns/database.md")
+        if db_content:
+            result["database"].append({"file": "database.md", "content": db_content, "bundle": "database"})
+            logger.info("Retrieved database schema knowledge for database bundle")
+
     # UI knowledge — ONLY when explicitly requested in SRS
     ui_libraries = _detect_ui_libraries(srs)
     for lib_name in ui_libraries:
@@ -206,28 +215,47 @@ def retrieve_knowledge(srs: dict) -> dict:
         kw_score = _match_domain_keywords(srs, pattern_file, keywords)
         entity_score = _match_entity_overlap(srs_entities, pattern_file, keywords)
         combined = (kw_score * 0.6) + (entity_score * 0.4)
-        if combined > 0:
+        if combined > 0.25:  # Increased threshold to filter out weak matches/false positives
             scored_patterns.append((combined, pattern_file))
 
     scored_patterns.sort(reverse=True, key=lambda x: x[0])
 
     for score, pattern_file in scored_patterns:
-        if score > 0.15:
-            content = _load_knowledge_file(f"patterns/{pattern_file}")
-            if content:
-                target_bundle = _PATTERN_TO_BUNDLE.get(pattern_file, "frontend")
+        content = _load_knowledge_file(f"patterns/{pattern_file}")
+        if content:
+            target_bundle = _PATTERN_TO_BUNDLE.get(pattern_file, "frontend")
+            if target_bundle == "fullstack":
+                result["frontend"].append({"file": pattern_file, "content": content, "bundle": "frontend", "score": round(score, 3)})
+                result["backend"].append({"file": pattern_file, "content": content, "bundle": "backend", "score": round(score, 3)})
+                logger.info("Retrieved fullstack pattern knowledge: %s (score=%.3f)", pattern_file, score)
+            else:
                 result[target_bundle].append({"file": pattern_file, "content": content, "bundle": target_bundle, "score": round(score, 3)})
                 logger.info("Retrieved pattern knowledge for %s: %s (score=%.3f)", target_bundle, pattern_file, score)
-        else:
-            break
 
     # Fallback: if no patterns matched, add crud.md to both frontend and backend
     # Skip for frontend-only projects — crud.md describes REST API endpoints that contradict localStorage patterns
-    if not is_frontend_only and not any(result[b] for b in ["frontend", "backend"] if any(e.get("file") == "crud.md" for e in result[b])):
-        content = _load_knowledge_file("patterns/crud.md")
-        if content:
-            for bundle in ["frontend", "backend"]:
-                result[bundle].append({"file": "crud.md", "content": content, "bundle": bundle, "score": 0.0})
-            logger.info("Fallback to generic pattern: crud.md")
+    if not is_frontend_only:
+        has_matched_pattern = any(
+            any(e.get("file") in ["crm.md", "blog.md", "ecommerce.md", "inventory.md", "analytics.md", "dashboard.md"]
+                for e in result[b])
+            for b in ["frontend", "backend"]
+        )
+        if not has_matched_pattern:
+            content = _load_knowledge_file("patterns/crud.md")
+            if content:
+                for bundle in ["frontend", "backend"]:
+                    result[bundle].append({"file": "crud.md", "content": content, "bundle": bundle, "score": 0.0})
+                logger.info("Fallback to generic pattern: crud.md")
+
+    # Frontend-only localStorage pattern — complete working example for LLM to copy
+    if is_frontend_only and "react" in frontend:
+        ls_content = _load_knowledge_file("patterns/localstorage_react.md")
+        if ls_content:
+            result["frontend"].append({
+                "file": "localstorage_react.md",
+                "content": ls_content,
+                "bundle": "frontend",
+            })
+            logger.info("Retrieved localStorage React pattern for frontend-only project")
 
     return result

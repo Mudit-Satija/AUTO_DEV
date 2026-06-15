@@ -132,6 +132,49 @@ def validate_requirements(project_dir: str, build_plan: dict) -> dict:
             continue
 
         content = filepath.read_text(encoding="utf-8", errors="replace")
+        
+        # --- Check for missing routing/symbol registration ---
+        path_str = bp["path"].replace("\\", "/")
+        depends_on = bp.get("depends_on", [])
+        
+        if path_str in ("frontend/src/App.jsx", "frontend/src/App.tsx", "frontend/src/App.vue"):
+            for dep_path in depends_on:
+                dep_str = dep_path.replace("\\", "/")
+                if "/pages/" in dep_str or "/views/" in dep_str:
+                    stem = Path(dep_str).stem
+                    parts = re.split(r"[-_\s]", stem)
+                    comp_name = "".join(p[0].upper() + p[1:] if p else "" for p in parts)
+                    if not re.search(rf"\b{comp_name}\b", content):
+                        errors.append({
+                            "file": bp["path"],
+                            "requirement": "route_registration",
+                            "error": f"Page component '{comp_name}' (from {dep_str}) is not imported or registered in App component",
+                        })
+
+        elif path_str == "backend/src/routes/index.js":
+            for dep_path in depends_on:
+                dep_str = dep_path.replace("\\", "/")
+                if "/routes/" in dep_str and dep_str != "backend/src/routes/index.js":
+                    stem = Path(dep_str).stem
+                    if stem not in content:
+                        errors.append({
+                            "file": bp["path"],
+                            "requirement": "route_mounting",
+                            "error": f"Route '{stem}' (from {dep_str}) is not imported or mounted in routes aggregator",
+                        })
+
+        elif path_str == "app/main.py":
+            for dep_path in depends_on:
+                dep_str = dep_path.replace("\\", "/")
+                if "/routers/" in dep_str:
+                    stem = Path(dep_str).stem
+                    if stem not in content:
+                        errors.append({
+                            "file": bp["path"],
+                            "requirement": "router_mounting",
+                            "error": f"Router '{stem}' (from {dep_str}) is not imported or registered in main app",
+                        })
+
         requirements = bp.get("requirements", [])
 
         if not requirements:

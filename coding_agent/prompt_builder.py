@@ -126,7 +126,8 @@ def build_file_prompt(
         lines.append("")
         lines.append("CRITICAL PAGE CONSTRAINTS — violating these causes the app to crash:")
         lines.append("- This file is at frontend/src/pages/<name>.jsx. Any relative import path starts from frontend/src/pages/, NOT from frontend/src/.")
-        lines.append("- Do NOT import App.css or any CSS file. './App.css' from this location resolves to frontend/src/pages/App.css which does not exist. Only App.jsx (at src/App.jsx) imports './App.css' correctly because its path is src/App.jsx. If you import CSS here, the app crashes with a module-not-found error.")
+        lines.append("- CRITICAL: NEVER import any CSS file (no imports ending in .css, e.g. do NOT import './App.css' or './styles.css' or 'styles.css'). Global styles are automatically loaded.")
+        lines.append("- CRITICAL: DO NOT import helper components, forms, cards, lists, modals, or page files (like './BudgetForm' or './BudgetList' or './Budget') from this pages directory. ALL sub-components, helper UI, forms, and dialogs MUST be defined inline as local functions/components inside this single page file.")
         lines.append("- In import statements, do NOT append file extensions (.js, .jsx, .ts, .tsx) to local imports. Use './Component' not './Component.jsx'. Vite resolves extensions automatically.")
         lines.append("- Every variable you use must be declared with useState or const. Never reference a variable that is not declared in this component.")
         lines.append("- Every function you call (like handleAddEvent, handleDelete) must be defined in this component before it is used.")
@@ -137,7 +138,8 @@ def build_file_prompt(
         lines.append("- Do NOT read localStorage or sessionStorage directly in the component function body. Any side effect (reading/writing localStorage, API calls, timers) must be wrapped in a useEffect hook.")
         lines.append("- Check your code mentally before returning: every identifier used in JSX must be defined above it.")
 
-    lines.extend(build_prompt_constraints(project_rules, [file_blueprint]))
+    bundle_type = file_blueprint.get("bundle", "frontend")
+    lines.extend(build_prompt_constraints(project_rules, [file_blueprint], bundle_type))
 
     # seedData.js specific constraints — must export single default object
     if "seedData.js" in file_path:

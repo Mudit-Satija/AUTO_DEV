@@ -77,6 +77,7 @@ result = generate_project(
     build_plan={"files": files},
     project_rules=PROJECT_RULES,
     output_dir=OUTPUT_DIR,
+    max_repair_attempts=0,
 )
 elapsed = time.perf_counter() - start
 

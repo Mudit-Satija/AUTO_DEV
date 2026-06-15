@@ -24,7 +24,7 @@ for f in plan["files"]:
     fpaths.append(f["path"])
     print(f'  {f["path"]} ({f["type"]})')
 
-result = generate_project(plan, rules, OUTPUT_DIR, max_repair_attempts=3)
+result = generate_project(plan, rules, OUTPUT_DIR, max_repair_attempts=0)
 
 print(f'\nFiles generated: {result["files_generated"]}')
 print(f'Files written: {len(result["files_written"])}')

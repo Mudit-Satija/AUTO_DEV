@@ -1,0 +1,10 @@
+﻿python :   File "D:\projects\AUTO_DEV\forensic_audit.py", line 311
+At line:1 char:1
++ python forensic_audit.py 2>&1 | Out-File -FilePath forensic_report.tx ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (  File "D:\proj...t.py", line 311:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    'No Streaming', 1, 'Low', 'Non-streaming calls mean entire response must complete before parsing begins.'),
+                                                                                                             ^
+SyntaxError: closing parenthesis ')' does not match opening parenthesis '[' on line 304

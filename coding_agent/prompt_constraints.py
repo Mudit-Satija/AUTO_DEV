@@ -147,9 +147,6 @@ def _summarize_knowledge(knowledge: dict) -> List[str]:
         for line in layout.strip().split("\n"):
             lines.append(line)
 
-    return lines
-
-
 def build_prompt_constraints(
     project_rules: dict,
     file_blueprints: Optional[List[dict]] = None,
@@ -162,25 +159,18 @@ def build_prompt_constraints(
     modules = [str(m) for m in project_rules.get("required_backend_modules", [])]
     pages = [str(p) for p in project_rules.get("required_pages", [])]
     paths = [bp.get("path", "") for bp in file_blueprints or []]
-    route_files = [p for p in paths if "/routes/" in p or "/routers/" in p]
-    model_files = [p for p in paths if "/models/" in p]
-    page_files = [p for p in paths if "/pages/" in p or "/views/" in p]
-
-    has_frontend = bool(page_files) and ("react" in frontend_fw or "vue" in frontend_fw)
+    
     is_frontend_only = backend_fw in ("", "none", "frontend only")
-    has_backend_project = not is_frontend_only and bool(backend_fw)
-
+    
     lines = [
-        f"- Required backend modules from SRS entities: {_csv(modules)}.",
-        f"- Required frontend pages from SRS: {_csv(pages)}.",
         "- Treat the listed files/build plan as the single source of truth.",
         "- Never import, mount, document, or call modules, routes, models, pages, middleware, services, or database clients that are not implied by the build plan and listed file paths.",
     ]
-
-    # ── ENTITY FIELD NAMES (use exact fields from SRS) ──
+    
+    # Entity field names are useful for models (backend), routes (backend), and pages (frontend)
     srs = project_rules.get("srs", {})
     entities = srs.get("entities", []) or []
-    if entities:
+    if entities and bundle_type in ("frontend", "backend", "database"):
         lines.append("")
         lines.append("### ENTITY FIELD NAMES — use these exact field names in all code:")
         for e in entities:
@@ -189,265 +179,187 @@ def build_prompt_constraints(
             if name and fields:
                 lines.append(f"  - {name}: {', '.join(fields)}")
 
-    if route_files:
-        lines.append(f"- Route/router files allowed in this prompt: {_csv(route_files)}.")
-    if model_files:
-        lines.append(f"- Model files allowed in this prompt: {_csv(model_files)}.")
-    if page_files:
-        lines.append(f"- Page/view files allowed in this prompt: {_csv(page_files)}.")
-
-    # CSS class reference — only these classes exist. Every className in JSX must come from this list.
-    if is_frontend_only:
-        css_classes = "app-wrapper, page-header, section, form-card, form-group, form-label, form-input, form-select, form-actions, navbar, navbar-brand, nav-links, nav-link, btn, btn-primary, btn-secondary, btn-danger, btn-sm, empty-state, account-card, account-name, account-balance, account-type, account-details, account-number, account-actions, transaction-card, transaction-type, transaction-amount, transaction-date, transaction-details, transaction-title, transaction-actions, transaction-category, transaction-status, items-grid, item-card, item-title, item-details, item-actions, stats-grid, stat-card, stat-title, stat-details, transfers-grid, transfer-card, transfer-title, transfer-details, transfer-status, accounts-grid, error-message, activity-item, activity-title, activity-date, recent-activity, upcoming-items, upcoming-item, upcoming-title, upcoming-date, section-header, page-wrapper, page-header h1, page-header p"
+    # 1. FRONTEND CONSTRAINTS
+    if bundle_type == "frontend":
+        lines.extend([
+            f"- Required frontend pages from SRS: {_csv(pages)}.",
+            "- In import statements, do NOT append file extensions (.js, .jsx, .ts, .tsx) to local imports. Vite resolves them automatically. Use './App' not './App.jsx'.",
+            "- DO NOT import or use sub-components (like Form, List, Card, Modal, etc.) from other files. Write all helper components, forms, and dialogs INLINE inside the same file.",
+            "- NEVER import components, forms, helper functions, page files, or anything else from other page files in the 'src/pages' directory (e.g., do NOT import Budget from './Budget'). All helper components must be defined inline within the same file."
+        ])
+        
+        # CSS classes and visual standards
+        css_classes = "app-wrapper, page-header, section, form-card, form-group, form-label, form-input, form-select, form-actions, navbar, navbar-brand, nav-links, nav-link, btn, btn-primary, btn-secondary, btn-danger, btn-sm, empty-state, account-card, account-name, account-balance, account-type, account-details, account-number, account-actions, transaction-card, transaction-type, transaction-amount, transaction-date, transaction-details, transaction-title, transaction-actions, transaction-category, transaction-status, items-grid, item-card, item-title, item-details, item-actions, stats-grid, stat-card, stat-title, stat-details, transfers-grid, transfer-card, transfer-title, transfer-details, transfer-status, accounts-grid, error-message, activity-item, activity-title, activity-date, recent-activity, upcoming-items, upcoming-item, upcoming-title, upcoming-date, section-header, page-wrapper"
         lines.append("")
-        lines.append(f"### AVAILABLE CSS CLASSES — use only these. Do NOT invent custom CSS classes: {css_classes}")
-
-    for bp in file_blueprints or []:
-        deps = [str(dep) for dep in bp.get("depends_on", [])]
-        if deps:
-            lines.append(f"- {bp.get('path', 'unknown')} may import only these local build-plan dependencies: {_csv(deps)}.")
-
-        # For frontend-only pages: tell the LLM exactly what props App.jsx passes
-        bp_path = bp.get("path", "")
-        if is_frontend_only and "/pages/" in bp_path:
-            source_entity = (bp.get("source_entity") or "").strip()
-            source_page = (bp.get("source_page") or "").strip()
-            if source_entity:
-                entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
-                prop_names = [e[0].lower() + e[1:] + "s" for e in entity_names]
-                setter_names = ["set" + e + "s" for e in entity_names]
-                props_str = ", ".join(f"{p}, {s}" for p, s in zip(prop_names, setter_names))
-                comp_name = source_page.replace(" ", "") if source_page else "PageName"
-                lines.append(f"- CRITICAL — App.jsx passes these EXACT props to {bp_path}: {{ {props_str} }}")
-                lines.append(f"  Function signature MUST be: function {comp_name}({{ {props_str} }})")
-                lines.append("  Do NOT use useState for entity data — use the props directly.")
-                lines.append("  Use crypto.randomUUID() for every new item's id field.")
-                lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
-                lines.append("  Form <input> values MUST come from a local useState, NOT from props. Never do value={prop.field}.")
-                lines.append("  For fields named type, category, status, currency, role, priority, or level: use <select> dropdown, not <input>.")
-                lines.append("  If you use useState(prop) for filtering/search, add a useEffect to re-sync when prop changes.")
-                lines.append("  Never use array[0] or array[index] directly in render without checking array.length first. Props start empty on first render.")
-                lines.append("  Do NOT add useEffect or localStorage logic in this file. App.jsx already handles all localStorage. You only call the setter props (setAccounts, etc.) on mutations.")
-                lines.append("  Do NOT add seed data in this file. App.jsx handles seeding. You receive data via props.")
-
-    # For App.jsx/tsx bundles in frontend-only projects: route-to-props mapping
-    if is_frontend_only:
-        is_app_bundle = any("App.jsx" in bp.get("path", "") or "App.tsx" in bp.get("path", "") for bp in file_blueprints or [])
-        if is_app_bundle:
-            all_files = project_rules.get("all_files", []) or []
-            route_lines = [
-                "",
-                "CRITICAL — each page below expects these EXACT props from App.jsx. Do NOT omit any prop:",
-            ]
-            for bp in all_files:
+        lines.append("### AVAILABLE CSS CLASSES — use only these in className string literals (e.g. className=\"btn btn-primary\"):")
+        lines.append("```css")
+        for cls in css_classes.split(", "):
+            lines.append(f".{cls} {{}}")
+        lines.append("```")
+        
+        lines.extend([
+            "",
+            "### CSS COORDINATION & VISUAL STANDARDS:",
+            "- App.css is imported ONLY by App.jsx. No page file may import ANY CSS file under any circumstances. Page files MUST NOT contain any import statement referencing a '.css' file (e.g., do NOT import './styles.css' or './App.css').",
+            "- CSS files DO NOT export variables, styles, class names, or components. NEVER import React components, styles, variables, or class names from 'App.css' or any other CSS file (e.g., do NOT do: import { section } from './styles.css').",
+            "- CSS class names must be written as literal strings in className (e.g., className=\"section\" or className=\"btn btn-primary\"). Do NOT import, define, or reference them as JavaScript variables or tags.",
+            "- Use ONLY standard HTML/JSX tags (like div, button, input, label, select, p, h1, span) styled with className (e.g., <div className=\"navbar\">, NOT <Navbar>). Do NOT use PascalCase component tags unless you have defined them locally as standard functions or imported them from 'react-router-dom'.",
+            "- CRITICAL: Every className in every page .jsx file MUST come ONLY from the AVAILABLE CSS CLASSES above. Do not invent new class names.",
+            "- The app must look polished and modern — dark theme, soft shadows, rounded corners, good spacing, consistent typography, smooth transitions, responsive layouts.",
+            "- Do NOT use heavy glassmorphism, excessive blur, excessive gradients, neon effects, or overly flashy animations.",
+            "- Forms and inputs must have proper labels, padding, border styles, focus rings.",
+            "- Stats/metrics must be displayed in a responsive grid of cards with clear labels, large values.",
+        ])
+        
+        # Prop contracts and page-specific props (for frontend-only)
+        if is_frontend_only:
+            for bp in file_blueprints or []:
                 bp_path = bp.get("path", "")
                 if "/pages/" in bp_path:
-                    bp_entity = (bp.get("source_entity") or "").strip()
-                    bp_page = (bp.get("source_page") or "").strip()
-                    if bp_entity:
-                        e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
-                        p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
-                        s_names = ["set" + e + "s" for e in e_names]
-                        props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
-                        comp_name = bp_page.replace(" ", "") if bp_page else "Page"
-                        route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
-            if len(route_lines) > 2:  # header + at least one page
-                lines.extend(route_lines)
+                    source_entity = (bp.get("source_entity") or "").strip()
+                    source_page = (bp.get("source_page") or "").strip()
+                    if source_entity:
+                        entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
+                        prop_names = [e[0].lower() + e[1:] + "s" for e in entity_names]
+                        setter_names = ["set" + e + "s" for e in entity_names]
+                        props_str = ", ".join(f"{p}, {s}" for p, s in zip(prop_names, setter_names))
+                        comp_name = source_page.replace(" ", "") if source_page else "PageName"
+                        lines.append(f"- CRITICAL — App.jsx passes these EXACT props to {bp_path}: {{ {props_str} }}")
+                        lines.append(f"  Function signature MUST be: function {comp_name}({{ {props_str} }})")
+                        lines.append("  Do NOT use useState for entity data — use the props directly.")
+                        lines.append("  Use crypto.randomUUID() for every new item's id field.")
+                        lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
 
-            lines.append("")
-            lines.append("CRITICAL — every <Link to=\"/X\"> in the navbar MUST have a matching <Route path=\"/X\">. If a nav link points to \"/overview\", there must be <Route path=\"/overview\" ... />. Both must be present.")
-
-    if db_kind == "mongo":
-        lines.append("- Database is MongoDB: use MongoDB/Mongoose for Express or Motor for FastAPI. Do not generate pg, pg.Pool, PostgreSQL SQL, SQLAlchemy, Sequelize, Prisma, CREATE TABLE, or INSERT INTO code.")
-        if model_files:
-            lines.append("- Model files depend on database.js for mongoose — import with: const mongoose = require(\"mongoose\"). Do NOT import from config/database.")
-    elif db_kind == "sql":
-        lines.append("- Database is SQL: use pg.Pool/raw SQL for Express/PostgreSQL or SQLAlchemy for FastAPI SQL. Do not generate MongoDB, mongoose, Motor, or document-schema code.")
-
-    if "express" in backend_fw or "node" in backend_fw:
-        if "package.json" in paths:
-            lines.append("- package.json scripts must use src/app.js for start/dev because server.js and src/index.js are not listed files.")
-        lines.append("- Express route aggregation must import and mount exactly the module route files listed by depends_on.")
-        lines.append("- Express app.js must mount routes/index.js under /api, call connectDB before app.listen for MongoDB, and must not create a separate server.js unless server.js is listed.")
-    if "fastapi" in backend_fw or "python" in backend_fw:
-        lines.append("- FastAPI imports must use the app package paths that correspond to listed files; do not import routers, schemas, models, or services that are not listed.")
-    if "react" in frontend_fw or "next" in frontend_fw:
-        is_ts = "typescript" in frontend_fw or "ts" in frontend_fw
-        ext = "tsx" if is_ts else "jsx"
-        lines.append(f"- React/Vite files must import only listed src/pages/*.{ext} files. Never use React.X properties (like React.Fragment) — use named imports from 'react' (useState, useEffect, Fragment, etc.) or default import 'import React from \"react\"' if you must access React.X.")
-        if is_ts:
-            lines.append("- Since the project uses TypeScript, all generated code in .ts and .tsx files must be fully typed (e.g. define interfaces/types for all state variables like useState<Task[]>([]), specify parameter and return types for functions). Avoid implicit 'any' types.")
-        lines.append("- In import statements, do NOT append file extensions (.js, .jsx, .ts, .tsx) to local imports. Vite resolves them automatically. Use './App' not './App.jsx'.")
-    if "vue" in frontend_fw:
-        lines.append("- Vue/Vite files must use Vue conventions, src/router/index.js, and listed src/views/*.vue files. Do not generate React JSX or React Router imports.")
-
-    if len(pages) > 1:
-        if "react" in frontend_fw or "next" in frontend_fw:
-            lines.append("- Since there are multiple pages, App.tsx/App.jsx must render a visible navigation header/bar (e.g. using Link from 'react-router-dom') to allow navigating to all pages (Dashboard, Tasks, etc.).")
-        elif "vue" in frontend_fw:
-            lines.append("- Since there are multiple pages, App.vue must render a visible navigation header/bar (e.g. using RouterLink) to allow navigating to all views (Dashboard, Tasks, etc.).")
-
-    # ── CSS COORDINATION (frontend-only and full-stack) ──
-    if has_frontend:
-        lines.extend([
-            "",
-            "### CSS COORDINATION RULES — these are CRITICAL for the app to render properly:",
-            "- App.css is imported ONLY by App.jsx. No page file may import any CSS file.",
-            "- CRITICAL: App.css must define ALL classes from the CSS CLASS REFERENCE below. Do not skip any.",
-            "- CRITICAL: Every className in every page .jsx file MUST come ONLY from the CSS CLASS REFERENCE below. Do not invent new class names.",
-            "- Use CSS custom properties (variables) in :root for a cohesive color palette, spacing, border-radius, and shadows.",
-            "- Use modern CSS: flexbox, grid, gap, border-radius, box-shadow, transitions, responsive media queries (768px breakpoint).",
-            "- The app must look polished and modern — cohesive palette, proper typography, consistent spacing, hover/focus states.",
-        ])
-
-    # ── VISUAL DESIGN QUALITY ──
-    if has_frontend:
-        lines.extend([
-            "",
-            "### VISUAL DESIGN STANDARDS:",
-            "- Every page must have a proper layout with a page header/title, content sections, and consistent spacing.",
-            "- Use cards/panels to group related content. Cards should have background, border-radius, shadow, and padding.",
-            "- Navigation bar must be sticky at the top with a dark/semi-transparent background, horizontal link layout, and hover states.",
-            "- Buttons must have clear hover effects, proper padding, and consistent styling.",
-            "- Forms and inputs must have proper labels, padding, border styles, focus rings, and validation styling.",
-            "- Empty states must show a helpful message and a call-to-action button/link.",
-            "- Stats/metrics must be displayed in a responsive grid of cards with clear labels, large values, and optional icons.",
-            "- Lists and tables must have proper spacing, alternating row colors, and clear headers.",
-            "- Use subtle transitions and hover effects throughout for a polished feel.",
-            "- The overall design should look like a modern SaaS application — not a bare prototype.",
-        ])
-
-    # ── SEED DATA for localStorage-based apps ──
-    if has_frontend and is_frontend_only:
-        lines.extend([
-            "",
-            "### SEED DATA REQUIREMENT (frontend-only, localStorage-based):",
-            "- On first visit, localStorage will be empty. The app MUST include seed/initial data so the user sees meaningful content immediately.",
-            "- In App.jsx or a separate seed file, define realistic sample data for each entity and write it to localStorage on first load.",
-            "- Seed data should be realistic and demonstrate the app's features (e.g., sample goals, contests, submissions, achievements).",
-            "- After seeding, the Dashboard and other pages must display this data beautifully — not as empty states.",
-            "- Use a pattern like: if (!localStorage.getItem('contests')) { localStorage.setItem('contests', JSON.stringify([...sampleData])); }",
-            "- Place the seeding logic in a useEffect in App.jsx that runs once on mount.",
-        ])
-    elif has_frontend and has_backend_project:
-        lines.extend([
-            "",
-            "### BACKEND API INTEGRATION — CRITICAL: pages MUST call the backend, NEVER use mock data:",
-            "- CRITICAL: The FIRST import in every page file MUST be: import api from '../services/api'",
-            "- CRITICAL: DO NOT use fetch() directly. Use the imported api (axios instance) for all HTTP calls.",
-            "- CRITICAL: DO NOT hardcode mock/sample/demo data arrays in any page component. All data must come from the backend API.",
-            "- CRITICAL: DO NOT use localStorage for entity data when a backend exists. localStorage is only for auth tokens or UI preferences.",
-            "- The EXACT pattern for fetching data: const [data, setData] = useState([]); useEffect(() => { api.get('/products').then(res => setData(res.data)).catch(err => setError(err.message)); }, []);",
-            "- The EXACT pattern for mutations: api.post('/products', body).then(() => { navigate('/products'); })",
-            "- Show loading state while fetching (e.g. return <div>Loading...</div> if loading is true).",
-            "- Handle API errors gracefully with user-friendly error messages.",
-            "- If the API returns empty data, show a helpful empty state with a button/link to the add form.",
-        ])
-
-    # ── PAGE-SPECIFIC LAYOUT GUIDANCE ──
-    if has_frontend:
-        lines.extend([
-            "",
-            "### PAGE LAYOUT GUIDELINES (generate based on the page type and SRS):",
-            "- Dashboard: show a stats grid at the top (4 key metrics in cards), then recent activity list/feed, then upcoming items (contests, deadlines). Use the .stats-grid, .stat-card, .recent-activity CSS classes.",
-            "- Analytics/Stats pages: show metric cards with values, then simple visualizations (you can use div-based progress bars, colored bars, or simple SVG charts — no external chart library needed), then breakdown sections. Use .metric-card, .chart-container, .breakdown-section CSS classes.",
-            "- List/Management pages (Goals, Tasks, etc.): show an add form at top, then a stats summary row, then a grid/list of items with edit/delete actions. Use .management-form, .stats-summary, .items-grid CSS classes.",
-            "- Calendar/Schedule pages: show month navigation, day headers, and a grid of days with items displayed inside. Use .calendar-nav, .calendar-grid, .day-cell, .day-number, .day-item CSS classes.",
-            "- Profile/Settings pages: show user info card at top, stats row, then editable form sections. Use .profile-header, .profile-stats, .settings-section CSS classes.",
-            "- Leaderboard/Ranking pages: show a table with rank, name, score columns. Use .leaderboard-table, .rank-badge CSS classes.",
-        ])
-
-    # ── DATA FLOW AND STATE ──
-    lines.extend([
-        "",
-        "- For any entity that appears on multiple pages (like 'Task' appearing on both Dashboard and Tasks pages), a single source of truth must exist.",
-    ])
-    if is_frontend_only:
-        lines.extend([
-            "- In frontend-only projects with no backend/database, this single source of truth must be a shared localStorage key (e.g., 'tasks') or a unified React/Vue Context/state store. Pages like Dashboard and Tasks must read from/write to the exact same localStorage key or state store.",
-            "- All localStorage reads and writes for entity data MUST be done inside useEffect hooks or handler functions, NOT in the component render body. Reading localStorage during render causes stale data and breaks React's rendering model.",
-            "- Never read localStorage in the component function body. Always use useState + useEffect: initialize state with the correct default (empty array), then read from localStorage inside useEffect and call the setter.",
-            "- Statistics and analytics pages must retrieve and compute metrics dynamically from this shared live entity collection. If the retrieved collection is empty, display a beautiful empty state with a button or a react-router-dom Link component to redirect the user to the management page (e.g., Tasks page) to add items.",
-        ])
-    else:
-        lines.extend([
-            "- This project has a backend — the single source of truth is the backend API, NOT localStorage.",
-            "- Every page must fetch data from the backend on mount and never use localStorage for entity data.",
-        ])
-
-    # ── CSS CLASS REFERENCE + KNOWLEDGE BASE ──
-    # All bundles embed FULL knowledge file content (no summaries) for rich context.
-    if bundle_type == "frontend":
-        if is_frontend_only:
-            # For frontend-only projects, the complete working example in KNOWLEDGE
-            # section below is the primary reference — skip verbose CSS boilerplate
-            lines.append("")
-            lines.append("### CSS — Use className values matching the patterns in the COMPLETE WORKING EXAMPLE below")
+            # Route-to-props mapping in App.jsx
+            is_app_bundle = any("App.jsx" in bp.get("path", "") or "App.tsx" in bp.get("path", "") for bp in file_blueprints or [])
+            if is_app_bundle:
+                all_files = project_rules.get("all_files", []) or []
+                route_lines = [
+                    "",
+                    "CRITICAL — each page below expects these EXACT props from App.jsx. Do NOT omit any prop:",
+                ]
+                for bp in all_files:
+                    bp_path = bp.get("path", "")
+                    if "/pages/" in bp_path:
+                        bp_entity = (bp.get("source_entity") or "").strip()
+                        bp_page = (bp.get("source_page") or "").strip()
+                        if bp_entity:
+                            e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
+                            p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
+                            s_names = ["set" + e + "s" for e in e_names]
+                            props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
+                            comp_name = bp_page.replace(" ", "") if bp_page else "Page"
+                            route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
+                if len(route_lines) > 2:
+                    lines.extend(route_lines)
+                lines.append("CRITICAL — every <Link to=\"/X\"> in the navbar MUST have a matching <Route path=\"/X\">.")
+            
+            lines.extend([
+                "",
+                "### DATA ACCESS PATTERN (frontend-only — localStorage):",
+                "- All entity data must be managed through App.jsx props and localStorage.",
+                "- Do NOT fetch() or use axios. Do NOT import '../services/api'.",
+                "- Seed data: On first visit, if localStorage is empty, seed realistic mock data in App.jsx in a useEffect on mount.",
+                "- Read localStorage only inside useEffect, never in the render body.",
+            ])
         else:
-            lines.append("")
-            lines.append("### REFERENCE — CSS classes, page layouts, and design conventions:")
-            lines.extend(_summarize_knowledge({}))
+            lines.extend([
+                "",
+                "### DATA ACCESS PATTERN (fullstack — backend API):",
+                "- All data must be fetched from/written to the backend API via the custom api utility: import api from '../services/api'",
+                "- DO NOT use fetch() or direct axios calls. Use the imported api client.",
+                "- DO NOT hardcode mock/sample/demo data arrays. Fetch everything on mount.",
+                "- DO NOT use localStorage for entity data when a backend exists.",
+            ])
+            
+        # React router v6 few-shot
+        lines.extend([
+            "",
+            "### FEW-SHOT EXAMPLES:",
+            "React Router v6 imports (CORRECT — useNavigate, Link, NOT useHistory):",
+            "import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';",
+            "const navigate = useNavigate();",
+            "navigate('/recipes');",
+            "",
+            "Do NOT wrap in ```jsx or ``` markdown fences.",
+            "Do NOT import CSS files in pages; global CSS is in App.css.",
+        ])
 
+    # 2. BACKEND CONSTRAINTS
+    elif bundle_type == "backend":
+        lines.extend([
+            f"- Required backend modules from SRS entities: {_csv(modules)}.",
+        ])
+        if db_kind == "mongo":
+            lines.append("- Database is MongoDB: use Mongoose models or Motor. Do not generate SQL code.")
+        elif db_kind == "sql":
+            lines.append("- Database is SQL: use raw SQL/pg for Node or SQLAlchemy for Python/FastAPI. Do not generate Mongoose or MongoDB code.")
+        
+        if "express" in backend_fw or "node" in backend_fw:
+            lines.extend([
+                "",
+                "### EXPRESS BACKEND CONVENTIONS:",
+                "- Do NOT generate app.js, config, or routes/index.js (these are deterministic).",
+                "- Generate ONLY models (in models/) and CRUD routes (in routes/).",
+                "- Every routes file must export a router (module.exports = router) containing standard CRUD endpoints.",
+                "- Imports should be CommonJS (require / module.exports). Avoid ES modules (import / export).",
+                "- To import models, use individual model files (e.g. const Category = require('../models/category')) or the models index (const { Category } = require('../models')).",
+                "- You can import config (const config = require('../config')) and errorHandler (const errorHandler = require('../middleware/errorHandler')) if needed.",
+                "- Do NOT return mock responses; connect dynamically to the database connector in config/database.js.",
+            ])
+        elif "fastapi" in backend_fw or "python" in backend_fw:
+            lines.extend([
+                "",
+                "### FASTAPI BACKEND CONVENTIONS:",
+                "- Do NOT generate main.py, db/database.py, or core/config.py (these are deterministic).",
+                "- Generate ONLY models (models/), pydantic schemas (schemas/), and routers (routers/).",
+                "- Routers must define a router (router = APIRouter()) and expose CRUD endpoints.",
+                "- Connection to database must use the connection instance in app/db/database.py.",
+            ])
+
+    # 3. DATABASE CONSTRAINTS
+    elif bundle_type == "database":
+        lines.append(f"- Target Database: {database} ({db_kind})")
+        if db_kind == "sql":
+            lines.extend([
+                "",
+                "### SQL SCHEMA & SEED RULES:",
+                "- Migrations in migrations/001_initial.sql must use CREATE TABLE IF NOT EXISTS.",
+                "- Seeds in seeds/seed.sql must use INSERT INTO statements with realistic mock records.",
+                "- Define foreign key relationships and matching data types.",
+            ])
+        elif db_kind == "mongo":
+            import_inst = ""
+            if "express" in backend_fw or "node" in backend_fw:
+                import_inst = "- To import models in seeds/seed.js, require them from '../backend/src/models' (e.g. const { Category, Transaction } = require('../backend/src/models')). Do NOT require from '../src/models' or 'src/models'."
+            elif "fastapi" in backend_fw or "python" in backend_fw:
+                import_inst = "- To import models in seeds/seed.py, import them from app.models (e.g. from app.models import Category, Transaction)."
+            
+            lines.extend([
+                "",
+                "### MONGODB SEED RULES:",
+                "- Seeds in seeds/seed.js or seeds/seed.py must insert sample records for all SRS entities.",
+                "- Clear collections before inserting (e.g. deleteMany({})).",
+                import_inst
+            ])
+
+    # 4. DOCS CONSTRAINTS
+    elif bundle_type == "docs":
+        lines.extend([
+            "",
+            "### DOCUMENTATION RULES:",
+            "- Generate a clear README.md project outline, tech stack description, and installation instructions.",
+        ])
+
+    # 5. KNOWLEDGE FILES INJECTION
     knowledge = project_rules.get("knowledge", {})
     if isinstance(knowledge, dict) and bundle_type in knowledge:
         bundle_knowledge = knowledge.get(bundle_type, [])
-    elif isinstance(knowledge, dict) and bundle_type == "backend":
-        bundle_knowledge = []
-    elif isinstance(knowledge, dict):
-        bundle_knowledge = knowledge.get("ui", []) + knowledge.get("patterns", []) + knowledge.get("architecture", [])
-    else:
-        bundle_knowledge = []
-    if bundle_knowledge:
-        lines.append("")
-        lines.append(f"### KNOWLEDGE — {bundle_type} reference files:")
-        for entry in bundle_knowledge:
-            lines.append(f"\n--- {entry.get('file', 'unknown')} ---")
-            lines.append(entry.get("content", ""))
-
-    # ── FEW-SHOT EXAMPLES (for known Llama-3.1-8B issues) ──
-    if bundle_type == "frontend":
-        lines.extend([
-            "",
-            "### FEW-SHOT EXAMPLES — follow these patterns exactly:",
-            "",
-            "React Router v6 imports (CORRECT — useNavigate, Link, NOT useHistory):",
-            "import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';",
-            'const navigate = useNavigate();',
-            '// ...',
-            "navigate('/recipes');",
-            "",
-            "NOTE: useHistory and history.push are React Router v5 — DO NOT USE. This project uses v6.",
-            "",
-            "Output format (CORRECT — raw code, no markdown fences):",
-            "Start your response with the first line of actual code (e.g. 'import React...').",
-            "Do NOT wrap in ```jsx or ``` markdown fences.",
-            "",
-            "For page files: Do NOT add 'import ... from \"../App.css\"' or any CSS import.",
-            "Styling is handled globally in App.css, not per-page.",
-        ])
-
-        if is_frontend_only:
-            lines.extend([
-                "",
-                "### DATA ACCESS PATTERN (frontend-only — NO backend API):",
-                "- CRITICAL: This project has NO backend API. Do NOT import '../services/api' or use api.get/post/put/delete.",
-                "- CRITICAL: Do NOT add 'import api from \"../services/api\"' to any file.",
-                "- CRITICAL: Do NOT use fetch() or axios. All data comes from localStorage via App.jsx.",
-                "- All entity data must be managed through App.jsx props and localStorage.",
-                "- Example CORRECT pattern for page components:",
-                "  const Recipes = ({ recipes, setRecipes }) => {",
-                "    const navigate = useNavigate();",
-                '    return <div className="app-wrapper">...;',
-                '  };',
-                "- Pages receive data as props from App.jsx; they do NOT fetch or import data themselves.",
-            ])
-        else:
-            lines.extend([
-                "",
-                "### DATA ACCESS PATTERN (full-stack — backend API):",
-                "- The FIRST import in every page file MUST be: import api from '../services/api'",
-                "- DO NOT use fetch() directly. Use the imported api (axios instance) for all HTTP calls.",
-                "- DO NOT hardcode mock/sample/demo data arrays. All data comes from the backend API.",
-            ])
+        if bundle_knowledge:
+            lines.append("")
+            lines.append(f"### KNOWLEDGE — {bundle_type} reference files:")
+            for entry in bundle_knowledge:
+                lines.append(f"\n--- {entry.get('file', 'unknown')} ---")
+                lines.append(entry.get("content", ""))
 
     return lines

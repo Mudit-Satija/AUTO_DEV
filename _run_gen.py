@@ -24,7 +24,7 @@ print(f"Build plan has {len(plan['files'])} files:")
 for f in plan["files"]:
     print(f"  {f['path']} ({f['type']})")
 
-result = generate_project(plan, rules, OUTPUT_DIR, max_repair_attempts=3)
+result = generate_project(plan, rules, OUTPUT_DIR, max_repair_attempts=0)
 
 print(f"\nFiles generated: {result['files_generated']}")
 print(f"Files written: {len(result['files_written'])}")

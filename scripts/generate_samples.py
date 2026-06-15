@@ -229,7 +229,7 @@ def generate_single_project(config: dict, parallel: bool = False) -> dict:
             build_plan={"files": files},
             project_rules=rules,
             output_dir=str(project_dir),
-            max_repair_attempts=3,
+            max_repair_attempts=0,
         )
 
         written = gen_result.get("files_written", [])
