@@ -10,7 +10,7 @@ LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "180"))
 
     
 DEFAULT_MODEL = "meta/llama-3.1-8b-instruct"                   
-CODER_MODEL = "qwen/qwen3-next-80b-a3b-instruct"  
+CODER_MODEL = "meta/llama-3.1-8b-instruct"  
 PLANNER_MODEL = DEFAULT_MODEL
 
 print("=" * 60)

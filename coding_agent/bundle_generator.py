@@ -18,7 +18,7 @@ from coding_agent.metrics import get_metrics_collector
 logger = logging.getLogger(__name__)
 
 BUNDLE_NAMES = ("backend", "frontend", "database", "docs")
-DEFAULT_MAX_BUNDLE_SIZE = 6
+DEFAULT_MAX_BUNDLE_SIZE = 1
 
 
 def group_files_by_bundle(file_blueprints: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
@@ -112,15 +112,31 @@ def build_bundle_prompt(
         "- Each file may only import from other files that are EXPLICITLY listed in this prompt. Never import from unlisted paths.",
     ])
 
+    # ── PROJECT FILE INVENTORY (so LLM knows what exists and what doesn't) ──
+    all_files = project_rules.get("all_files", file_blueprints)
+    if len(all_files) > len(file_blueprints):
+        lines.append("")
+        lines.append("### PROJECT FILE INVENTORY — these are ALL files in this project:")
+        for f in all_files:
+            marker = " ← YOU ARE GENERATING THIS" if f.get("path") in {bp["path"] for bp in file_blueprints} else ""
+            lines.append(f"  {f.get('path', 'unknown')}{marker}")
+        lines.append("")
+        lines.append("You may ONLY import from files in the list above, or from standard npm packages")
+        lines.append("(react, react-dom, react-router-dom, axios, etc.).")
+        lines.append("Do NOT invent imports like '../services/', '../components/', '../utils/', or 'uuid'.")
+        lines.append("These directories/files do not exist in this project and will cause build errors.")
+
     bundle_type = "frontend" if "frontend" in bundle_name else "backend" if "backend" in bundle_name else "database" if "database" in bundle_name else "docs"
     lines.extend(build_prompt_constraints(project_rules, file_blueprints, bundle_type))
 
+    has_backend = (project_rules.get("backend_framework") or "").lower() not in ("", "none", "frontend only")
     if "frontend" in bundle_name:
         lines.append("- Use Vite environment variables (import.meta.env.VITE_*), not process.env.REACT_APP_*.")
-        lines.append("- The api.js service: const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL }); export default api;")
-        lines.append("- All page files must import api with: import api from '../services/api'")
-        lines.append("- Pages use api directly: api.get('/products'), api.post('/products', body), api.put('/products/:id', body), api.delete('/products/:id')")
-        lines.append("- Do NOT create named export wrappers like 'productApi' or 'orderApi' in api.js. Pages call api.get() directly with the endpoint path.")
+        if has_backend:
+            lines.append("- The api.js service: const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL }); export default api;")
+            lines.append("- All page files must import api with: import api from '../services/api'")
+            lines.append("- Pages use api directly: api.get('/products'), api.post('/products', body), api.put('/products/:id', body), api.delete('/products/:id')")
+            lines.append("- Do NOT create named export wrappers like 'productApi' or 'orderApi' in api.js. Pages call api.get() directly with the endpoint path.")
 
     return "\n".join(lines)
 

@@ -27,7 +27,7 @@ from llm_client import CODER_MODEL, get_llm_response
 
 logger = logging.getLogger(__name__)
 
-MAX_REPAIR_ATTEMPTS = 3
+MAX_REPAIR_ATTEMPTS = 0
 
 
 def _run_bundle(
@@ -36,8 +36,23 @@ def _run_bundle(
     project_rules: dict,
     output_dir: str,
 ) -> tuple:
-    """Execute a single bundle in isolation and return (written_metadata, local_registry)."""
+    """Execute a single bundle in isolation and return (written_metadata, local_registry).
+    
+    Files with static_content are written directly without LLM calls.
+    """
     local_registry: dict = {}
+    
+    # Static template files — skip LLM entirely
+    if all(bp.get("static_content") for bp in file_blueprints):
+        written = []
+        for bp in file_blueprints:
+            content = bp["static_content"]
+            meta = write_file({"path": bp["path"], "content": content}, output_dir)
+            register_file(local_registry, bp, meta)
+            written.append(meta)
+            logger.info("Static file written: %s (%d bytes)", bp["path"], meta.get("size", 0))
+        return written, local_registry
+    
     written = generate_bundle_with_fallback(
         bundle_name, file_blueprints, project_rules, output_dir, local_registry,
     )
@@ -201,6 +216,9 @@ def generate_project(
     metrics = get_metrics_collector()
     files = build_plan.get("files", [])
 
+    if max_repair_attempts > 0:
+        logger.warning("Repair loops are currently enabled (max_repair_attempts=%d)", max_repair_attempts)
+
     metrics.start_pipeline(len(files))
 
     # Phase 1: Pre-generation dependency graph validation
@@ -213,6 +231,10 @@ def generate_project(
 
     registry: dict = {}
     written: list = []
+
+    # Store full file inventory for prompt visibility
+    project_rules = dict(project_rules)  # copy to avoid mutating caller's dict
+    project_rules["all_files"] = files
 
     bundles = group_and_partition_files(files)
     logger.info(
@@ -230,7 +252,7 @@ def generate_project(
             "all_validations_pass": True,
         }
 
-    with ThreadPoolExecutor(max_workers=len(bundles)) as executor:
+    with ThreadPoolExecutor(max_workers=min(4, len(bundles))) as executor:
         future_map = {
             executor.submit(
                 _run_bundle, name, bundles[name], project_rules, output_dir,
@@ -312,14 +334,55 @@ def generate_project(
 def post_process_generated_files(output_dir: str) -> None:
     """Fix common LLM code generation errors via string replacement.
     Runs after all files are written and before zipping.
+
+    Fixes for Llama-3.1-8B known issues:
+    - Markdown code fences (```jsx, ```javascript, ```)
+    - React Router v5 useHistory / history.push → v6 useNavigate / navigate
+    - CSS imports in page files (App.css import in pages/*.jsx)
+    - Mongoose import paths in backend models
     """
     import glob as glob_mod
+    import re
 
-    models_dir = output_dir.replace("\\", "/") + "/backend/src/models"
-    for filepath in glob_mod.glob(models_dir + "/*.js"):
+    root = output_dir.replace("\\", "/")
+
+    # Fix all .js and .jsx files (skip node_modules)
+    for filepath in glob_mod.glob(root + "/**/*.js*", recursive=True):
+        if 'node_modules' in filepath:
+            continue
         with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
         original = content
+
+        # 1. Strip leading/trailing markdown code fences
+        content = re.sub(
+            r'^```(?:jsx|javascript|js|tsx|ts)\s*\n',
+            '',
+            content,
+            count=1,
+        )
+        content = re.sub(
+            r'\n```\s*$',
+            '',
+            content,
+            count=1,
+        )
+
+        # 2. Replace useHistory → useNavigate, history.push → navigate
+        content = content.replace('useHistory', 'useNavigate')
+        content = content.replace('history.push', 'navigate')
+
+        # 3. Strip CSS imports from page files only (pages/*.jsx)
+        #    App.jsx and main.jsx legitimately import App.css; pages should not.
+        if '/pages/' in filepath and filepath.endswith('.jsx'):
+            content = re.sub(
+                r"^import\s+['\"]?[^'\"\n]*\.css['\"]?\s*;?\s*$",
+                '',
+                content,
+                flags=re.MULTILINE,
+            )
+
+        # 4. Fix mongoose import paths (backward compat for backend models)
         content = content.replace(
             "const mongoose = require('../config/database')",
             "const mongoose = require('mongoose')",
@@ -328,7 +391,8 @@ def post_process_generated_files(output_dir: str) -> None:
             "const mongoose = require('./config/database')",
             "const mongoose = require('mongoose')",
         )
+
         if content != original:
-            logger.info("post_process: fixed mongoose import in %s", filepath)
+            logger.info("post_process: fixed %s", filepath)
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)

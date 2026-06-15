@@ -10,6 +10,7 @@ Every file must have requirement lineage:
 No file is generated without answering: which SRS entry created it?
 """
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List
@@ -436,7 +437,27 @@ def _build_frontend_config(frontend_fw: str, has_backend: bool = True) -> List[D
              "purpose": pkg_purpose,
              "reason_for_existence": f"Tech stack: {frontend_fw}",
              "source_requirement": "tech_stack", "source_page": "", "source_entity": "", "source_flow": "",
-             "depends_on": [], "provides": [], "requirements": []},
+             "depends_on": [], "provides": [], "requirements": [],
+             "static_content": json.dumps({
+                 "name": "recipe-book",
+                 "private": True,
+                 "version": "1.0.0",
+                 "type": "module",
+                 "scripts": {
+                     "dev": "vite",
+                     "build": "vite build",
+                     "preview": "vite preview",
+                 },
+                 "dependencies": {
+                     "react": "^18.2.0",
+                     "react-dom": "^18.2.0",
+                     "react-router-dom": "^6.20.0",
+                 },
+                 "devDependencies": {
+                     "@vitejs/plugin-react": "^4.2.0",
+                     "vite": "^5.0.0",
+                 },
+             }, indent=2)},
             {"path": "frontend/.env", "type": "env",
              "purpose": "Frontend environment variables",
              "reason_for_existence": f"Tech stack: {frontend_fw}",
@@ -446,17 +467,20 @@ def _build_frontend_config(frontend_fw: str, has_backend: bool = True) -> List[D
              "purpose": f"Vite build configuration for React {'with TypeScript support' if is_ts else ''}",
              "reason_for_existence": f"Tech stack: {frontend_fw}",
              "source_requirement": "tech_stack", "source_page": "", "source_entity": "", "source_flow": "",
-             "depends_on": [], "provides": [], "requirements": []},
+             "depends_on": [], "provides": [], "requirements": [],
+             "static_content": 'import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\n\nexport default defineConfig({\n  plugins: [react()],\n});\n'},
             {"path": "frontend/index.html", "type": "source",
              "purpose": f"HTML entry point referencing /src/main.{ext}",
              "reason_for_existence": f"Tech stack: {frontend_fw}",
              "source_requirement": "tech_stack", "source_page": "", "source_entity": "", "source_flow": "",
-             "depends_on": [], "provides": [], "requirements": []},
+             "depends_on": [], "provides": [], "requirements": [],
+             "static_content": '<!DOCTYPE html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>RecipeBook</title>\n  </head>\n  <body>\n    <div id="root"></div>\n    <script type="module" src="/src/main.jsx"></script>\n  </body>\n</html>\n'},
             {"path": f"frontend/src/main.{ext}", "type": "source",
              "purpose": "React entry point rendering Root component",
              "reason_for_existence": f"Tech stack: {frontend_fw}",
              "source_requirement": "tech_stack", "source_page": "", "source_entity": "", "source_flow": "",
-             "depends_on": [f"frontend/src/App.{ext}"], "provides": [], "requirements": ["app rendering"]},
+             "depends_on": [f"frontend/src/App.{ext}"], "provides": [], "requirements": ["app rendering"],
+             "static_content": 'import React from "react";\nimport { createRoot } from "react-dom/client";\nimport App from "./App";\n\nconst root = createRoot(document.getElementById("root"));\nroot.render(<App />);\n'},
             {"path": f"frontend/src/App.{ext}", "type": "source",
              "purpose": "Root application component with router and styling wrapper",
              "reason_for_existence": f"Tech stack: {frontend_fw}",

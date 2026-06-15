@@ -147,51 +147,6 @@ def _summarize_knowledge(knowledge: dict) -> List[str]:
         for line in layout.strip().split("\n"):
             lines.append(line)
 
-    if not knowledge:
-        return lines
-
-    ui_directives = []
-    pattern_directives = []
-    arch_directives = []
-
-    for entry in knowledge.get("ui", []):
-        fname = entry.get("file", "")
-        if "shadcn" in fname or "shad" in fname:
-            ui_directives.extend([
-                "- Card-based layout with proper spacing, border-radius, shadows.",
-                "- Dashboard: metric/KPI cards in responsive grid.",
-                "- Tables: clean header row, alternating row colors, hover states.",
-                "- Forms: labeled inputs, proper spacing, validation styling.",
-                "- Navigation: top navbar with active link highlighting.",
-                "- Responsive: mobile-first, 768px breakpoint.",
-            ])
-
-    for entry in knowledge.get("patterns", []):
-        fname = entry.get("file", "")
-        if "dashboard" in fname:
-            pattern_directives.append("- Dashboard: 4 KPI cards grid, activity feed, upcoming items, empty states with CTAs.")
-        elif "analytics" in fname:
-            pattern_directives.append("- Analytics: metric cards with computed values, visual breakdowns, progress bars.")
-        elif "crud" in fname:
-            pattern_directives.append("- Management: add-form card, stats summary, items grid with edit/delete buttons.")
-
-    for entry in knowledge.get("architecture", []):
-        fname = entry.get("file", "")
-        if "bulletproof_react" in fname:
-            arch_directives.append("- React: feature-based folders, useState for local state, react-router-dom for routing.")
-
-    sections = {
-        "UI DESIGN CONVENTIONS": ui_directives,
-        "DOMAIN PATTERNS": pattern_directives,
-        "ARCHITECTURE CONVENTIONS": arch_directives,
-    }
-
-    for heading, dirs in sections.items():
-        if dirs:
-            lines.append("")
-            lines.append(f"### {heading}")
-            lines.extend(dirs)
-
     return lines
 
 
@@ -221,6 +176,18 @@ def build_prompt_constraints(
         "- Treat the listed files/build plan as the single source of truth.",
         "- Never import, mount, document, or call modules, routes, models, pages, middleware, services, or database clients that are not implied by the build plan and listed file paths.",
     ]
+
+    # ── ENTITY FIELD NAMES (use exact fields from SRS) ──
+    srs = project_rules.get("srs", {})
+    entities = srs.get("entities", []) or []
+    if entities:
+        lines.append("")
+        lines.append("### ENTITY FIELD NAMES — use these exact field names in all code:")
+        for e in entities:
+            name = e.get("name", "")
+            fields = e.get("fields", [])
+            if name and fields:
+                lines.append(f"  - {name}: {', '.join(fields)}")
 
     if route_files:
         lines.append(f"- Route/router files allowed in this prompt: {_csv(route_files)}.")
@@ -352,28 +319,73 @@ def build_prompt_constraints(
             "- Every page must fetch data from the backend on mount and never use localStorage for entity data.",
         ])
 
-    # ── INCLUDE CSS REFERENCE + KNOWLEDGE BASE ──
-    if has_frontend and bundle_type == "frontend":
-        knowledge = project_rules.get("knowledge", {})
-        if isinstance(knowledge, dict) and "frontend" in knowledge:
-            bundle_knowledge = knowledge.get("frontend", [])
-        else:
-            bundle_knowledge = knowledge.get("ui", []) + knowledge.get("patterns", []) + knowledge.get("architecture", [])
-        knowledge_lines = _summarize_knowledge({"ui": bundle_knowledge, "patterns": bundle_knowledge, "architecture": bundle_knowledge})
+    # ── CSS CLASS REFERENCE + KNOWLEDGE BASE ──
+    # All bundles embed FULL knowledge file content (no summaries) for rich context.
+    if bundle_type == "frontend":
         lines.append("")
         lines.append("### REFERENCE — CSS classes, page layouts, and design conventions:")
-        lines.extend(knowledge_lines)
-    elif bundle_type == "backend":
-        knowledge = project_rules.get("knowledge", {})
-        if isinstance(knowledge, dict) and "backend" in knowledge:
-            bundle_knowledge = knowledge.get("backend", [])
+        lines.extend(_summarize_knowledge({}))
+
+    knowledge = project_rules.get("knowledge", {})
+    if isinstance(knowledge, dict) and bundle_type in knowledge:
+        bundle_knowledge = knowledge.get(bundle_type, [])
+    elif isinstance(knowledge, dict) and bundle_type == "backend":
+        bundle_knowledge = []
+    elif isinstance(knowledge, dict):
+        bundle_knowledge = knowledge.get("ui", []) + knowledge.get("patterns", []) + knowledge.get("architecture", [])
+    else:
+        bundle_knowledge = []
+    if bundle_knowledge:
+        lines.append("")
+        lines.append(f"### KNOWLEDGE — {bundle_type} reference files:")
+        for entry in bundle_knowledge:
+            lines.append(f"\n--- {entry.get('file', 'unknown')} ---")
+            lines.append(entry.get("content", ""))
+
+    # ── FEW-SHOT EXAMPLES (for known Llama-3.1-8B issues) ──
+    if bundle_type == "frontend":
+        lines.extend([
+            "",
+            "### FEW-SHOT EXAMPLES — follow these patterns exactly:",
+            "",
+            "React Router v6 navigation (CORRECT — useNavigate, NOT useHistory):",
+            'import { useNavigate } from \'react-router-dom\';',
+            'const navigate = useNavigate();',
+            '// ...',
+            "navigate('/recipes');",
+            "",
+            "NOTE: useHistory and history.push are React Router v5 — DO NOT USE. This project uses v6.",
+            "",
+            "Output format (CORRECT — raw code, no markdown fences):",
+            "Start your response with the first line of actual code (e.g. 'import React...').",
+            "Do NOT wrap in ```jsx or ``` markdown fences.",
+            "",
+            "For page files: Do NOT add 'import ... from \"../App.css\"' or any CSS import.",
+            "Styling is handled globally in App.css, not per-page.",
+        ])
+
+        if is_frontend_only:
+            lines.extend([
+                "",
+                "### DATA ACCESS PATTERN (frontend-only — NO backend API):",
+                "- CRITICAL: This project has NO backend API. Do NOT import '../services/api' or use api.get/post/put/delete.",
+                "- CRITICAL: Do NOT add 'import api from \"../services/api\"' to any file.",
+                "- CRITICAL: Do NOT use fetch() or axios. All data comes from localStorage via App.jsx.",
+                "- All entity data must be managed through App.jsx props and localStorage.",
+                "- Example CORRECT pattern for page components:",
+                "  const Recipes = ({ recipes, setRecipes }) => {",
+                "    const navigate = useNavigate();",
+                '    return <div className="app-wrapper">...;',
+                '  };',
+                "- Pages receive data as props from App.jsx; they do NOT fetch or import data themselves.",
+            ])
         else:
-            bundle_knowledge = []
-        if bundle_knowledge:
-            lines.append("")
-            lines.append("### REFERENCE — Backend architecture and patterns:")
-            for entry in bundle_knowledge:
-                lines.append(f"\n--- {entry.get('file', 'unknown')} ---")
-                lines.append(entry.get("content", ""))
+            lines.extend([
+                "",
+                "### DATA ACCESS PATTERN (full-stack — backend API):",
+                "- The FIRST import in every page file MUST be: import api from '../services/api'",
+                "- DO NOT use fetch() directly. Use the imported api (axios instance) for all HTTP calls.",
+                "- DO NOT hardcode mock/sample/demo data arrays. All data comes from the backend API.",
+            ])
 
     return lines
