@@ -112,6 +112,22 @@ def build_bundle_prompt(
         "- Each file may only import from other files that are EXPLICITLY listed in this prompt. Never import from unlisted paths.",
     ])
 
+    # ── App.jsx/main.jsx mounting contract (high visibility, near top of prompt) ──
+    _APP_PATHS = {"frontend/src/App.jsx", "frontend/src/App.tsx", "frontend/src/App.vue"}
+    if any(bp.get("path") in _APP_PATHS for bp in file_blueprints):
+        lines.extend([
+            "",
+            "### CRITICAL — App.jsx MOUNTING CONTRACT:",
+            " - main.jsx (already exists, you do not generate it) does:",
+            "     import App from './App';",
+            "     createRoot(document.getElementById('root')).render(<App />);",
+            " - Therefore App.jsx MUST end with: export default App;",
+            " - App.jsx MUST NOT import ReactDOM",
+            " - App.jsx MUST NOT call ReactDOM.render() or createRoot()",
+            " - App.jsx is a regular component — it returns JSX, nothing else",
+            " - This is React 18. main.jsx handles all mounting.",
+        ])
+
     # ── PROJECT FILE INVENTORY (so LLM knows what exists and what doesn't) ──
     all_files = project_rules.get("all_files", file_blueprints)
     if len(all_files) > len(file_blueprints):

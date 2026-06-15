@@ -154,6 +154,7 @@ def retrieve_knowledge(srs: dict) -> dict:
 
     backend = (tech_stack.get("backend") or "").lower()
     frontend = (tech_stack.get("frontend") or "").lower()
+    is_frontend_only = backend in ("", "none", "frontend only")
 
     srs_entities = srs.get("entities", []) or []
     srs_pages = srs.get("pages", []) or []
@@ -171,6 +172,11 @@ def retrieve_knowledge(srs: dict) -> dict:
             continue
         arch_file = arch_info["file"]
         target_bundle = arch_info["bundle"]
+        
+        # Skip full-stack-oriented architecture files for frontend-only projects
+        if is_frontend_only and arch_file == "bulletproof_react.md":
+            logger.info("Skipping %s for frontend-only project (full-stack oriented)", arch_file)
+            continue
         
         # Check if this stack key matches backend or frontend
         matches_backend = stack_key in backend
@@ -216,7 +222,8 @@ def retrieve_knowledge(srs: dict) -> dict:
             break
 
     # Fallback: if no patterns matched, add crud.md to both frontend and backend
-    if not any(result[b] for b in ["frontend", "backend"] if any(e.get("file") == "crud.md" for e in result[b])):
+    # Skip for frontend-only projects — crud.md describes REST API endpoints that contradict localStorage patterns
+    if not is_frontend_only and not any(result[b] for b in ["frontend", "backend"] if any(e.get("file") == "crud.md" for e in result[b])):
         content = _load_knowledge_file("patterns/crud.md")
         if content:
             for bundle in ["frontend", "backend"]:
