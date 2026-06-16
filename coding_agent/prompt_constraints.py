@@ -167,17 +167,28 @@ def build_prompt_constraints(
         "- Never import, mount, document, or call modules, routes, models, pages, middleware, services, or database clients that are not implied by the build plan and listed file paths.",
     ]
     
-    # Entity field names are useful for models (backend), routes (backend), and pages (frontend)
+    # Entity field names — must be impossible to abbreviate
     srs = project_rules.get("srs", {})
     entities = srs.get("entities", []) or []
     if entities and bundle_type in ("frontend", "backend", "database"):
         lines.append("")
-        lines.append("### ENTITY FIELD NAMES — use these exact field names in all code:")
+        lines.append("### ENTITY OBJECT SHAPES — copy these exact key names character-for-character:")
         for e in entities:
             name = e.get("name", "")
             fields = e.get("fields", [])
             if name and fields:
-                lines.append(f"  - {name}: {', '.join(fields)}")
+                lines.append(f"  - {name} — every object MUST have exactly this shape (do NOT abbreviate or use single-letter keys):")
+                lines.append("    {")
+                for f in fields:
+                    lines.append(f"      {f}: ...,")
+                lines.append("    }")
+        if bundle_type == "frontend":
+            lines.append("")
+            lines.append("### VARIABLE NAMING RULE:")
+            lines.append("- Name every form state variable after the EXACT entity field name from the shape above.")
+            lines.append("  Example: field 'author' → const [author, setAuthor] = useState('')")
+            lines.append("  Example: field 'dateAdded' → const [dateAdded, setDateAdded] = useState('')")
+            lines.append("- Do NOT invent field names that are not listed in ENTITY OBJECT SHAPES above.")
 
     # 1. FRONTEND CONSTRAINTS
     if bundle_type == "frontend":
@@ -218,7 +229,23 @@ def build_prompt_constraints(
                 if "/pages/" in bp_path:
                     source_entity = (bp.get("source_entity") or "").strip()
                     source_page = (bp.get("source_page") or "").strip()
-                    if source_entity:
+                    # Prefer spec-stored props (single deterministic computation)
+                    spec = bp.get("spec") or {}
+                    fp = spec.get("frontend_props")
+                    if fp:
+                        props_str = fp["destructure"]
+                        comp_name = source_page.replace(" ", "") if source_page else "PageName"
+                        first_data_prop = props_str.split(",")[0].strip() if props_str else "data"
+                        first_setter = props_str.split(",")[1].strip() if "," in props_str else "setData"
+                        lines.append(f"- CRITICAL — App.jsx passes these EXACT props to {bp_path}: {{ {props_str} }}")
+                        lines.append(f"  Function signature MUST be: function {comp_name}({{ {props_str} }})")
+                        lines.append(f"  CRITICAL — The entity for this page is '{bp.get('source_entity', '')}'. The data prop is named '{first_data_prop}' and the setter is named '{first_setter}'. You MUST use these EXACT names. Do NOT substitute a different entity name (e.g. do NOT use 'books' when the entity is 'ReadingEntry').")
+                        lines.append("  CRITICAL — Do NOT rename props. App.jsx will pass 'undefined' for any invented name, causing runtime crashes.")
+                        lines.append("  Do NOT use useState for entity data — use the props directly.")
+                        lines.append("  CRITICAL — Do NOT create independent useState copies of props data. Use props directly for ALL rendering. Compute derived values (totals, counts, filtered lists) from props in the render body, not from duplicate state.")
+                        lines.append("  Use crypto.randomUUID() for every new item's id field.")
+                        lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
+                    elif source_entity:
                         entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
                         prop_names = [e[0].lower() + e[1:] + "s" for e in entity_names]
                         setter_names = ["set" + e + "s" for e in entity_names]
@@ -226,7 +253,10 @@ def build_prompt_constraints(
                         comp_name = source_page.replace(" ", "") if source_page else "PageName"
                         lines.append(f"- CRITICAL — App.jsx passes these EXACT props to {bp_path}: {{ {props_str} }}")
                         lines.append(f"  Function signature MUST be: function {comp_name}({{ {props_str} }})")
+                        lines.append(f"  CRITICAL — The entity for this page is '{source_entity}'. The data prop '{prop_names[0] if prop_names else 'data'}' IS the entity data. Use it directly. Do NOT substitute another entity name (e.g. do NOT use 'books' when the entity is 'ReadingEntry').")
+                        lines.append("  CRITICAL — Do NOT rename props. App.jsx will pass 'undefined' for any invented name, causing runtime crashes.")
                         lines.append("  Do NOT use useState for entity data — use the props directly.")
+                        lines.append("  CRITICAL — Do NOT create independent useState copies of props data. Use props directly for ALL rendering. Compute derived values (totals, counts, filtered lists) from props in the render body, not from duplicate state.")
                         lines.append("  Use crypto.randomUUID() for every new item's id field.")
                         lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
 
@@ -241,25 +271,35 @@ def build_prompt_constraints(
                 for bp in all_files:
                     bp_path = bp.get("path", "")
                     if "/pages/" in bp_path:
-                        bp_entity = (bp.get("source_entity") or "").strip()
-                        bp_page = (bp.get("source_page") or "").strip()
-                        if bp_entity:
-                            e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
-                            p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
-                            s_names = ["set" + e + "s" for e in e_names]
-                            props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
-                            comp_name = bp_page.replace(" ", "") if bp_page else "Page"
-                            route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
+                        # Use spec-stored props if available (single deterministic computation)
+                        spec = bp.get("spec") or {}
+                        fp = spec.get("frontend_props")
+                        if fp:
+                            comp_name = (bp.get("source_page") or "").replace(" ", "") or "Page"
+                            route_lines.append(f"  - {comp_name} expects: {{{fp['destructure']}}}")
+                        else:
+                            bp_entity = (bp.get("source_entity") or "").strip()
+                            bp_page = (bp.get("source_page") or "").strip()
+                            if bp_entity:
+                                e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
+                                p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
+                                s_names = ["set" + e + "s" for e in e_names]
+                                props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
+                                comp_name = bp_page.replace(" ", "") if bp_page else "Page"
+                                route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
                 if len(route_lines) > 2:
                     lines.extend(route_lines)
+                lines.append("CRITICAL — Use these EXACT prop variable names when passing props to each page. Do NOT rename them. Every page's destructured parameter names MUST match exactly what you pass in the JSX.")
                 lines.append("CRITICAL — every <Link to=\"/X\"> in the navbar MUST have a matching <Route path=\"/X\">.")
             
             lines.extend([
                 "",
                 "### DATA ACCESS PATTERN (frontend-only — localStorage):",
-                "- All entity data must be managed through App.jsx props and localStorage.",
+                "- App.jsx is the SINGLE source of truth for both reading AND writing localStorage.",
+                "- Pages MUST NOT read or write localStorage. Pages call setter props (e.g. setBooks). App.jsx persists automatically.",
+                "- Do NOT add useEffect in pages for localStorage — that creates TWO sources of truth for the same key.",
                 "- Do NOT fetch() or use axios. Do NOT import '../services/api'.",
-                "- Seed data: On first visit, if localStorage is empty, seed realistic mock data in App.jsx in a useEffect on mount.",
+                "- Seed data: Do NOT generate any sample/seed/starter data. On first visit, if localStorage has no data for an entity, initialize its state to an empty array: setItems([]). Do NOT create any hardcoded example objects. The app should show its empty-state UI (e.g. 'No items yet') until the user adds real data through the forms.",
                 "- Read localStorage only inside useEffect, never in the render body.",
             ])
         else:

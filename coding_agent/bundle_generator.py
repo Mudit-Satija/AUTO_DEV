@@ -178,7 +178,16 @@ def build_bundle_prompt(
             " - App.jsx MUST NOT import ReactDOM",
             " - App.jsx MUST NOT call ReactDOM.render() or createRoot()",
             " - App.jsx is a regular component — it returns JSX, nothing else",
+            " - App.jsx MUST NOT import or use useNavigate. Only page files (inside <Route>) use useNavigate.",
+            "   Calling useNavigate() in App.jsx crashes because <BrowserRouter> is rendered in App's JSX, not above it.",
             " - This is React 18. main.jsx handles all mounting.",
+            "",
+            "### CRITICAL — NO SAMPLE/STARTER DATA:",
+            " - Do NOT generate any sample/seed/starter data arrays in App.jsx or any other file.",
+            " - On first visit, if localStorage has no data for an entity, initialize to empty array: setItems([]).",
+            " - Do NOT create any hardcoded example objects. The app should show its empty-state UI",
+            "   (e.g. 'No books yet') until the user adds real data through the forms.",
+            " - This eliminates a class of bugs where seed data variable scoping breaks across entities.",
         ])
 
     # ── PROJECT FILE INVENTORY (so LLM knows what exists and what doesn't) ──
