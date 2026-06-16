@@ -196,7 +196,9 @@ def build_prompt_constraints(
             f"- Required frontend pages from SRS: {_csv(pages)}.",
             "- In import statements, do NOT append file extensions (.js, .jsx, .ts, .tsx) to local imports. Vite resolves them automatically. Use './App' not './App.jsx'.",
             "- DO NOT import or use sub-components (like Form, List, Card, Modal, etc.) from other files. Write all helper components, forms, and dialogs INLINE inside the same file.",
-            "- NEVER import components, forms, helper functions, page files, or anything else from other page files in the 'src/pages' directory (e.g., do NOT import Budget from './Budget'). All helper components must be defined inline within the same file."
+            "- NEVER import components, forms, helper functions, page files, or anything else from other page files in the 'src/pages' directory (e.g., do NOT import Budget from './Budget'). All helper components must be defined inline within the same file.",
+            "- CRITICAL: Do NOT add Update/Edit buttons that use navigate() or <Link to> with a dynamic ID segment (e.g. `/tasks/123`, `/books/abc`). There are NO dynamic routes like `/tasks/:id`. Every route is a static path listed in App.jsx. Use inline toggle/delete on the same page instead of navigating to an edit page.",
+            "- CRITICAL: Do NOT use navigate() to go to any path that is not listed in App.jsx's routing table. Only the exact paths from the nav links are valid."
         ])
         
         # CSS classes and visual standards
@@ -290,7 +292,93 @@ def build_prompt_constraints(
                 if len(route_lines) > 2:
                     lines.extend(route_lines)
                 lines.append("CRITICAL — Use these EXACT prop variable names when passing props to each page. Do NOT rename them. Every page's destructured parameter names MUST match exactly what you pass in the JSX.")
-                lines.append("CRITICAL — every <Link to=\"/X\"> in the navbar MUST have a matching <Route path=\"/X\">.")
+                # Literal routing table — computed from build plan, LLM must copy verbatim
+                routing_table_lines = ["", "### EXACT ROUTES AND NAV LINKS — copy these verbatim, do not add/remove/rename:", ""]
+                page_bps = [bp for bp in (file_blueprints or []) if "/pages/" in bp.get("path", "")]
+                # Determine the home route page (Dashboard) if present
+                home_route = "/"
+                home_page_name = None
+                # Aggregate all unique entity names across all pages (for Dashboard which has no specific entity)
+                all_entity_names = []
+                for pbp in page_bps:
+                    pn = pbp.get("source_page", "")
+                    if pn.lower() == "dashboard":
+                        home_page_name = pn
+                    entity_str = pbp.get("source_entity", "").strip()
+                    if entity_str:
+                        for e in entity_str.split(";"):
+                            e = e.strip()
+                            if e and e not in all_entity_names:
+                                all_entity_names.append(e)
+                # Build route map dict for JSON block
+                route_map = {}  # comp_name -> route
+                nav_links = {}  # route -> nav_label
+                for pbp in page_bps:
+                    page_name = pbp.get("source_page", "")
+                    comp_name = page_name.replace(" ", "") if page_name else "Page"
+                    route = pbp.get("route_path", "/" + page_name.lower().replace(" ", "-") if page_name else "/")
+                    route_map[comp_name] = route
+                    nav_label = page_name if page_name else "Page"
+                    nav_links[route] = nav_label
+                # JSON route map — structured reference the LLM must use for every navigate/link decision
+                import json
+                route_map_json = json.dumps(route_map, indent=2)
+                nav_links_json = json.dumps(nav_links, indent=2)
+                routing_table_lines.append("")
+                routing_table_lines.append("### ROUTE MAP — use this for ALL navigate() and <Link to> decisions:")
+                routing_table_lines.append("```json")
+                routing_table_lines.append(f'"pageRoutes": {route_map_json}')
+                routing_table_lines.append("")
+                routing_table_lines.append(f'"navLinks": {nav_links_json}')
+                routing_table_lines.append("```")
+                routing_table_lines.append("CRITICAL RULE: Every single call to navigate() and every <Link to='...'> in EVERY file MUST use a path from 'pageRoutes' above.")
+                routing_table_lines.append("If the path is not in 'pageRoutes', it does not exist in the router — using it will 404 at runtime.")
+                routing_table_lines.append("For example: to navigate to AddTask, use navigate('/add') NOT navigate('/add-task'). To navigate to Tasks, use navigate('/') NOT navigate('/tasks').")
+                routing_table_lines.append("Look up the component name in 'pageRoutes' to find the correct path. NEVER guess or infer a path from a component name.")
+                routing_table_lines.append("")
+                for pbp in page_bps:
+                    page_name = pbp.get("source_page", "")
+                    comp_name = page_name.replace(" ", "") if page_name else "Page"
+                    route = pbp.get("route_path", "/" + page_name.lower().replace(" ", "-") if page_name else "/")
+                    # Build JSX prop pairs (key={value} syntax) from entities
+                    spec = pbp.get("spec") or {}
+                    fp = spec.get("frontend_props")
+                    if fp:
+                        # destructure is "books, setBooks"; convert to "books={books} setBooks={setBooks}"
+                        parts = [p.strip() for p in fp["destructure"].split(",")]
+                        jsx_props = " ".join(f"{p}={{{p}}}" for p in parts)
+                    else:
+                        entity_str = pbp.get("source_entity", "").strip()
+                        if entity_str:
+                            e_names = [e.strip() for e in entity_str.split(";") if e.strip()]
+                            props_parts = []
+                            for e in e_names:
+                                data_name = e[0].lower() + e[1:] + "s"
+                                setter_name = "set" + e + "s"
+                                props_parts.append(f"{data_name}={{{data_name}}}")
+                                props_parts.append(f"{setter_name}={{{setter_name}}}")
+                            jsx_props = " ".join(props_parts)
+                        elif all_entity_names:
+                            # Page with no entity (like Dashboard) gets all aggregated entities
+                            props_parts = []
+                            for e in all_entity_names:
+                                data_name = e[0].lower() + e[1:] + "s"
+                                setter_name = "set" + e + "s"
+                                props_parts.append(f"{data_name}={{{data_name}}}")
+                                props_parts.append(f"{setter_name}={{{setter_name}}}")
+                            jsx_props = " ".join(props_parts)
+                        else:
+                            jsx_props = "data={data} setData={setData}"
+                    nav_label = page_name if page_name else "Page"
+                    routing_table_lines.append(f"  <Route path='{route}' element={{<{comp_name} {jsx_props} />}} />")
+                    routing_table_lines.append(f"  <Link to='{route}'>{nav_label}</Link>")
+                if home_page_name:
+                    routing_table_lines.append(f"  (Dashboard at '{home_route}' is the home/index page)")
+                routing_table_lines.append("")
+                routing_table_lines.append("Do not add, remove, or rename any route or link path. Copy every character exactly as shown above.")
+                routing_table_lines.append("CRITICAL CONSTRAINT: Dashboard MUST be at '/'. Do NOT create a separate '/dashboard' route. If you create '<Link to=\"/dashboard\">' or '<Route path=\"/dashboard\">', your output FAILS.")
+                routing_table_lines.append("CRITICAL CONSTRAINT: Do NOT add ANY route or nav link beyond what is listed above. If it is not in this table, it does not exist. Do NOT add dynamic routes like '/tasks/:id' or '/books/:id'.")
+                lines.extend(routing_table_lines)
             
             lines.extend([
                 "",

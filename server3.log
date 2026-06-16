@@ -1,0 +1,53 @@
+============================================================
+LLM CLIENT INITIALIZED
+============================================================
+Default Model: meta/llama-3.1-8b-instruct
+Coder Model: meta/llama-3.1-8b-instruct
+API Key loaded: Yes
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14995 characters
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 15760 characters
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14986 characters
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14981 characters
+============================================================
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-8381855c-63f0-4ce3-8a34-7bc760c62eeb","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/App.jsx===\nimport React, { useState, useEffect } from 'react';\nimport { Browse
+============================================================
+
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14989 characters
+============================================================
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-2b2b8d3c-8203-4989-be0d-b4f69315d968","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/AddBook.jsx===\nimport React, { useState } from 'react';\nimport { Link, u
+============================================================
+
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-ec11836e-a7a0-4414-96c1-06fdb70be5d4","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/Books.jsx===\nimport React, { useState } from 'react';\nimport { Link } fr
+============================================================
+
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-8c3505dd-45bc-476f-91b6-fdc293256072","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/Dashboard.jsx===\nimport React, { useState } from 'react';\n\nfunction Das
+============================================================
+
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-af7c4adb-e052-4ce7-99fb-415607db8035","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/ReadingList.jsx===\nimport React, { useState, useEffect } from 'react';\ni
+============================================================
+
+INFO:     127.0.0.1:52783 - "POST /generate-from-srs HTTP/1.1" 200 OK

@@ -1,0 +1,61 @@
+2026-06-16 11:15:13,044 - __main__ - INFO - Starting FastAPI server...
+2026-06-16 11:15:13,050 - asyncio - DEBUG - Using proactor: IocpProactor
+INFO:     Started server process [5128]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-06-16 11:16:02,595 - __main__ - INFO - SRS generation: project=BookShelf pages=4 entities=2 flows=4 backend=none
+2026-06-16 11:16:02,598 - knowledge_retriever - INFO - Skipping bulletproof_react.md for frontend-only project (full-stack oriented)
+2026-06-16 11:16:02,601 - knowledge_retriever - INFO - Skipping bulletproof_react.md for frontend-only project (full-stack oriented)
+2026-06-16 11:16:02,603 - knowledge_retriever - INFO - Retrieved localStorage React pattern for frontend-only project
+2026-06-16 11:16:02,603 - __main__ - INFO - Knowledge retrieved: {'frontend': 1}
+2026-06-16 11:16:02,604 - coding_agent.project_generator - INFO - Grouped 12 files into 12 bundles (max 6 per bundle): ['docs', 'frontend_1', 'frontend_2', 'frontend_3', 'frontend_4', 'frontend_5', 'frontend_6', 'frontend_7', 'frontend_8', 'frontend_9', 'frontend_10', 'frontend_11']
+2026-06-16 11:16:02,606 - coding_agent.bundle_generator - INFO - Bundle [frontend_10] prompt: 14332 chars, 1 files
+2026-06-16 11:16:02,608 - coding_agent.project_generator - INFO - Static file written: README.md (0 bytes)
+2026-06-16 11:16:02,608 - coding_agent.project_generator - INFO - Static file written: frontend/.env (0 bytes)
+2026-06-16 11:16:02,608 - coding_agent.project_generator - INFO - Bundle [docs] completed: 1 files written
+2026-06-16 11:16:02,611 - coding_agent.project_generator - INFO - Bundle [frontend_1] completed: 1 files written
+2026-06-16 11:16:02,610 - coding_agent.project_generator - INFO - Static file written: frontend/vite.config.js (0 bytes)
+2026-06-16 11:16:02,611 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): integrate.api.nvidia.com:443
+2026-06-16 11:16:02,611 - coding_agent.project_generator - INFO - Bundle [frontend_11] completed: 1 files written
+2026-06-16 11:16:02,612 - coding_agent.project_generator - INFO - Static file written: frontend/index.html (0 bytes)
+2026-06-16 11:16:02,612 - coding_agent.project_generator - INFO - Static file written: frontend/package.json (0 bytes)
+2026-06-16 11:16:02,612 - coding_agent.bundle_generator - INFO - Bundle [frontend_5] prompt: 15097 chars, 1 files
+2026-06-16 11:16:02,612 - coding_agent.project_generator - INFO - Bundle [frontend_2] completed: 1 files written
+2026-06-16 11:16:02,613 - coding_agent.project_generator - INFO - Static file written: frontend/src/App.css (0 bytes)
+2026-06-16 11:16:02,614 - coding_agent.project_generator - INFO - Bundle [frontend_3] completed: 1 files written
+2026-06-16 11:16:02,614 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): integrate.api.nvidia.com:443
+2026-06-16 11:16:02,615 - coding_agent.bundle_generator - INFO - Bundle [frontend_7] prompt: 14323 chars, 1 files
+2026-06-16 11:16:02,615 - coding_agent.project_generator - INFO - Bundle [frontend_4] completed: 1 files written
+2026-06-16 11:16:02,615 - coding_agent.project_generator - INFO - Static file written: frontend/src/main.jsx (0 bytes)
+2026-06-16 11:16:02,618 - coding_agent.bundle_generator - INFO - Bundle [frontend_8] prompt: 14318 chars, 1 files
+2026-06-16 11:16:02,618 - coding_agent.project_generator - INFO - Bundle [frontend_6] completed: 1 files written
+2026-06-16 11:16:02,619 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): integrate.api.nvidia.com:443
+2026-06-16 11:16:02,619 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): integrate.api.nvidia.com:443
+2026-06-16 11:16:11,114 - urllib3.connectionpool - DEBUG - https://integrate.api.nvidia.com:443 "POST /v1/chat/completions HTTP/1.1" 200 6188
+2026-06-16 11:16:11,115 - coding_agent.bundle_generator - INFO - Bundle [frontend_8] response: 5219 chars, 1 files parsed of 1 expected
+2026-06-16 11:16:11,116 - coding_agent.bundle_generator - INFO - Bundle [frontend_8] valid — all 1 dynamic files present
+2026-06-16 11:16:11,117 - coding_agent.bundle_generator - INFO - Bundle [frontend_9] prompt: 14326 chars, 1 files
+2026-06-16 11:16:11,117 - coding_agent.project_generator - INFO - Bundle [frontend_8] completed: 1 files written
+2026-06-16 11:16:11,119 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): integrate.api.nvidia.com:443
+2026-06-16 11:16:12,899 - urllib3.connectionpool - DEBUG - https://integrate.api.nvidia.com:443 "POST /v1/chat/completions HTTP/1.1" 200 4466
+2026-06-16 11:16:12,913 - coding_agent.bundle_generator - INFO - Bundle [frontend_10] response: 3560 chars, 1 files parsed of 1 expected
+2026-06-16 11:16:12,913 - coding_agent.bundle_generator - INFO - Bundle [frontend_10] valid — all 1 dynamic files present
+2026-06-16 11:16:12,914 - coding_agent.project_generator - INFO - Bundle [frontend_10] completed: 1 files written
+2026-06-16 11:16:23,881 - urllib3.connectionpool - DEBUG - https://integrate.api.nvidia.com:443 "POST /v1/chat/completions HTTP/1.1" 200 7841
+2026-06-16 11:16:23,881 - coding_agent.bundle_generator - INFO - Bundle [frontend_9] response: 6796 chars, 1 files parsed of 1 expected
+2026-06-16 11:16:23,881 - coding_agent.bundle_generator - INFO - Bundle [frontend_9] valid — all 1 dynamic files present
+2026-06-16 11:16:23,881 - coding_agent.project_generator - INFO - Bundle [frontend_9] completed: 1 files written
+2026-06-16 11:16:48,750 - urllib3.connectionpool - DEBUG - https://integrate.api.nvidia.com:443 "POST /v1/chat/completions HTTP/1.1" 200 21263
+2026-06-16 11:16:48,886 - coding_agent.bundle_generator - INFO - Bundle [frontend_7] response: 19576 chars, 1 files parsed of 1 expected
+2026-06-16 11:16:48,887 - coding_agent.bundle_generator - INFO - Bundle [frontend_7] valid — all 1 dynamic files present
+2026-06-16 11:16:48,888 - coding_agent.project_generator - INFO - Bundle [frontend_7] completed: 1 files written
+2026-06-16 11:21:04,563 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): integrate.api.nvidia.com:443
+2026-06-16 11:21:12,730 - urllib3.connectionpool - DEBUG - https://integrate.api.nvidia.com:443 "POST /v1/chat/completions HTTP/1.1" 200 6565
+2026-06-16 11:21:12,744 - coding_agent.bundle_generator - INFO - Bundle [frontend_5] response: 5612 chars, 1 files parsed of 1 expected
+2026-06-16 11:21:12,744 - coding_agent.bundle_generator - INFO - Bundle [frontend_5] valid — all 1 dynamic files present
+2026-06-16 11:21:12,745 - coding_agent.project_generator - INFO - Bundle [frontend_5] completed: 1 files written
+2026-06-16 11:21:12,838 - coding_agent.smoke_test - INFO -   [PASS] frontend/package.json exists
+2026-06-16 11:21:12,846 - coding_agent.smoke_test - INFO - All smoke tests passed for generated_outputs/project_1781588762
+2026-06-16 11:21:12,863 - __main__ - INFO - Generation complete: 12 files, project_1781588762.zip, knowledge={'frontend': 1}
+2026-06-16 11:21:12,863 - __main__ - INFO - Pipeline metrics: bundles=5, total_gen_time_ms=387973, validation_time_ms=102, zip_time_ms=14

@@ -1,5 +1,7 @@
 import requests
 import os
+import time
+import threading
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,9 +10,24 @@ NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "180"))
 
+# Rate limiter — paces requests to avoid 429 from concurrent bundles
+_rate_limiter_lock = threading.Lock()
+_last_request_time = 0.0
+_MIN_INTERVAL_SECONDS = 0.6  # 0.6s between requests
+
+def _rate_limit_pacer():
+    global _last_request_time
+    with _rate_limiter_lock:
+        now = time.perf_counter()
+        elapsed = now - _last_request_time
+        if elapsed < _MIN_INTERVAL_SECONDS:
+            sleep_time = _MIN_INTERVAL_SECONDS - elapsed
+            time.sleep(sleep_time)
+        _last_request_time = time.perf_counter()
+
     
 DEFAULT_MODEL = "meta/llama-3.1-8b-instruct"                   
-CODER_MODEL = "meta/llama-3.1-8b-instruct"  
+CODER_MODEL = "deepseek-ai/deepseek-v4-flash"  
 PLANNER_MODEL = DEFAULT_MODEL
 
 print("=" * 60)
@@ -55,13 +72,13 @@ def get_llm_response(prompt: str, model: str = None):
         ]
     }
     
-    import time
-    
-    max_retries = 3
-    backoffs = [1.0, 2.0, 4.0]
-    
+    max_retries = 5
+    backoffs = [3.0, 6.0, 12.0, 24.0, 30.0]
+
     for attempt in range(max_retries + 1):
         try:
+            _rate_limit_pacer()
+
             print(f"\n{'='*60}")
             print(f"DEBUG: Using model: {model} (Attempt {attempt + 1}/{max_retries + 1})")
             print(f"DEBUG: Prompt length: {len(prompt)} characters")

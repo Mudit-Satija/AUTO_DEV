@@ -252,7 +252,7 @@ def generate_project(
             "all_validations_pass": True,
         }
 
-    with ThreadPoolExecutor(max_workers=min(4, len(bundles))) as executor:
+    with ThreadPoolExecutor(max_workers=1) as executor:
         future_map = {
             executor.submit(
                 _run_bundle, name, bundles[name], project_rules, output_dir,
@@ -329,6 +329,42 @@ def generate_project(
     post_process_generated_files(output_dir)
     metrics.end_pipeline("Success" if not final_errors else "Failed")
     return result
+
+
+_ROUTER_IMPORT_RE = re.compile(r"""from\s+['"]react-router-dom['"]""")
+_ROUTER_SYMBOLS = {
+    "Link": r"<\s*Link\b",
+    "NavLink": r"<\s*NavLink\b",
+    "useNavigate": r"useNavigate\s*\(",
+    "Navigate": r"<\s*Navigate\b",
+}
+
+
+def _add_missing_router_import(content: str) -> str:
+    """Scan content for react-router-dom symbols and add missing import.
+
+    Returns modified content with import added at the top if needed.
+    """
+    if _ROUTER_IMPORT_RE.search(content):
+        return content
+    needed = []
+    for sym, pattern in _ROUTER_SYMBOLS.items():
+        if re.search(pattern, content):
+            needed.append(sym)
+    if not needed:
+        return content
+    import_stmt = f"import {{ {', '.join(needed)} }} from 'react-router-dom';\n"
+    # Insert after the first import block or at the top of the file
+    lines = content.split("\n")
+    insert_idx = 0
+    for i, line in enumerate(lines):
+        if line.startswith("import ") or line.startswith("// "):
+            insert_idx = i + 1
+        else:
+            break
+    lines.insert(insert_idx, import_stmt.rstrip())
+    logger.info("  auto-added missing react-router-dom import: {%s}", ", ".join(needed))
+    return "\n".join(lines)
 
 
 def post_process_generated_files(output_dir: str) -> None:
@@ -413,6 +449,38 @@ def post_process_generated_files(output_dir: str) -> None:
                 content,
                 flags=re.MULTILINE,
             )
+
+        # 6. Strip localStorage calls from page files (App.jsx handles all persistence)
+        #    Prevents double-persistence bug where pages independently read/write
+        #    the same localStorage keys as App.jsx.
+        if '/pages/' in norm_path and norm_path.endswith('.jsx'):
+            # Remove entire useEffect blocks that contain localStorage (they duplicate
+            # App.jsx's persistence and seed data logic)
+            content = re.sub(
+                r'useEffect\(\s*\(\s*\)\s*=>\s*\{[^}]*localStorage\.(?:getItem|setItem)[^}]*\},\s*\[[^\]]*\]\s*\);\s*',
+                '',
+                content,
+                flags=re.DOTALL,
+            )
+            # Remove empty useEffect() => { }, [...] blocks left behind
+            content = re.sub(
+                r'useEffect\(\s*\(\s*\)\s*=>\s*\{\s*\},\s*\[[^\]]*\]\s*\);\s*',
+                '',
+                content,
+                flags=re.MULTILINE,
+            )
+            # Remove standalone localStorage.setItem calls in handlers
+            content = re.sub(
+                r'^\s*localStorage\.setItem\s*\(.*\);\s*$',
+                '',
+                content,
+                flags=re.MULTILINE,
+            )
+
+        # 7. Auto-add missing react-router-dom imports for page files that use
+        #    <Link>, useNavigate, <NavLink>, or <Navigate> without importing them.
+        if '/pages/' in norm_path and norm_path.endswith(('.jsx', '.tsx')):
+            content = _add_missing_router_import(content)
 
         if content != original:
             logger.info("post_process: fixed %s", filepath)

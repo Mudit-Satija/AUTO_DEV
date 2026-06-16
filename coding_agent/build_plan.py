@@ -107,6 +107,20 @@ def _sanitize_page_name(name: str) -> str:
     return clean if clean else "Page"
 
 
+def _page_route_path(name: str) -> str:
+    """Convert page name to a URL path (kebab-case).
+    Dashboard is the home route -> '/'.
+    """
+    if name.lower() == "dashboard":
+        return "/"
+    return "/" + name.lower().replace(" ", "-")
+
+
+def _nav_link_path(name: str) -> str:
+    """Nav link path for a page. Dashboard uses '/'."""
+    return _page_route_path(name)
+
+
 def _entity_module_name(entity_name: str) -> str:
     name = _pascal_case(entity_name)
     if name.endswith("s") and len(name) > 1:
@@ -645,7 +659,12 @@ def _build_pages(
 
         # Dashboard is a summary/stats page, NOT a data entry form
         if name.lower() == "dashboard":
-            derived_purpose = f"{name} page — SUMMARY with counts/recent activity, NO add/edit forms"
+            derived_purpose = (
+                f"{name} page — SUMMARY with counts/recent activity, NO add/edit forms. "
+                "CRITICAL: Do NOT include any <form>, <input>, <select>, <textarea>, "
+                "<button type='submit'>, or state variables for creating/editing data. "
+                "This page ONLY displays read-only aggregated data (counts, lists, stats)."
+            )
         elif purpose:
             derived_purpose = purpose
         else:
@@ -663,6 +682,7 @@ def _build_pages(
             "depends_on": [],
             "provides": [],
             "requirements": ["component export"],
+            "route_path": _page_route_path(name),
         }
 
         # Build spec from entities referenced by this page

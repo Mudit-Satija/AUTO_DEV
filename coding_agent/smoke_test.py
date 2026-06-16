@@ -124,11 +124,13 @@ def _smoke_test_react(root: Path) -> List[str]:
     for fpath in jsx_files:
         rel = str(fpath.relative_to(root)).replace("\\", "/")
         errors.extend(_check_file_imports(fpath, rel, all_frontend, "JSX import"))
+        errors.extend(_check_missing_router_imports(fpath, rel))
 
     frontend_js_files = sorted(f for f in root.rglob("*") if "node_modules" not in f.parts and f.suffix in (".js", ".ts"))
     for fpath in frontend_js_files:
         rel = str(fpath.relative_to(root)).replace("\\", "/")
         errors.extend(_check_file_imports(fpath, rel, all_frontend, "Import"))
+        errors.extend(_check_missing_router_imports(fpath, rel))
 
     return errors
 
@@ -290,4 +292,39 @@ def _check_file_imports(
         if not _import_exists(resolved, all_files):
             errors.append(f"{label} in {relative_path} references missing file: {resolved}")
 
+    return errors
+
+
+_ROUTER_SYMBOLS = {
+    "Link": r"<\s*Link\b",
+    "NavLink": r"<\s*NavLink\b",
+    "useNavigate": r"useNavigate\s*\(",
+    "Navigate": r"<\s*Navigate\b",
+}
+
+
+def _check_missing_router_imports(filepath: Path, relative_path: str) -> List[str]:
+    """Check that JSX files using react-router-dom symbols also import them.
+
+    Error format uses 'in <path>:' so ``_extract_file_from_smoke_error`` can
+    parse the file path for the repair loop.
+    """
+    errors: List[str] = []
+    ext = filepath.suffix
+    if ext not in (".jsx", ".tsx", ".js", ".ts"):
+        return errors
+    content = filepath.read_text(encoding="utf-8", errors="replace")
+    has_router_import = bool(re.search(
+        r"""from\s+['"]react-router-dom['"]""", content,
+    ))
+    if not has_router_import:
+        missing = []
+        for sym, pattern in _ROUTER_SYMBOLS.items():
+            if re.search(pattern, content):
+                missing.append(sym)
+        if missing:
+            errors.append(
+                f"Missing react-router-dom import in {relative_path}: "
+                f"uses {', '.join(missing)} but no import from 'react-router-dom'"
+            )
     return errors

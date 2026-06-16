@@ -1,0 +1,59 @@
+============================================================
+LLM CLIENT INITIALIZED
+============================================================
+Default Model: meta/llama-3.1-8b-instruct
+Coder Model: meta/llama-3.1-8b-instruct
+API Key loaded: Yes
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14332 characters
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 15097 characters
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14323 characters
+============================================================
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14318 characters
+============================================================
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-7e8f68de-a241-4f94-9f4f-4423cb7b1276","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/Books.jsx===\nimport React, { useState, useEffect } from 'react';\nimport 
+============================================================
+
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 1/4)
+DEBUG: Prompt length: 14326 characters
+============================================================
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-76c02e46-03ad-4330-b26f-49c5968d0a24","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/ReadingList.jsx===\nimport React, { useState, useEffect } from 'react';\ni
+============================================================
+
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-50425214-c7e3-411f-9636-68cb1c815012","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/Dashboard.jsx===\nimport React, { useState, useEffect } from 'react';\nimp
+============================================================
+
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-0a0e0aa9-19ab-4a7a-bcb8-56e2aaaa136d","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/pages/AddBook.jsx===\nimport React, { useState } from 'react';\nimport { Link, u
+============================================================
+
+WARNING: Network error ReadTimeout. Retrying in 1.0s...
+
+============================================================
+DEBUG: Using model: meta/llama-3.1-8b-instruct (Attempt 2/4)
+DEBUG: Prompt length: 15097 characters
+============================================================
+DEBUG: Status Code: 200
+DEBUG: Response preview: {"id":"chatcmpl-c2a5c3bc-8127-4c7f-9b5f-8f8b860c5465","choices":[{"index":0,"message":{"content":"===FILE: frontend/src/App.jsx===\nimport React, { useState, useEffect } from 'react';\nimport { Browse
+============================================================
+
+INFO:     127.0.0.1:52798 - "POST /generate-from-srs HTTP/1.1" 200 OK
