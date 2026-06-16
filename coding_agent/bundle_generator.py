@@ -102,22 +102,57 @@ def build_bundle_prompt(
         purpose = bp.get("purpose", "")
         if is_frontend_only and "/pages/" in bp_path:
             bp_entity = (bp.get("source_entity") or "").strip()
-            if bp_entity:
+            # Prefer spec-stored props (single deterministic computation)
+            spec = bp.get("spec") or {}
+            fp = spec.get("frontend_props")
+            if fp:
+                props_str = fp["destructure"]
+                signature = fp["signature"]
+                page_entity = bp.get("source_entity", "")
+                first_data_prop = props_str.split(",")[0].strip() if props_str else "data"
+                first_setter = props_str.split(",")[1].strip() if "," in props_str else "setData"
+                lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
+                lines.append(f"   CRITICAL — Props passed by App.jsx: {{{props_str}}}. Function signature MUST be: {signature}.")
+                lines.append(f"   CRITICAL — The entity for this page is '{page_entity}'. The data prop is named '{first_data_prop}' and the setter is named '{first_setter}'. You MUST use these EXACT names. Do NOT substitute a different entity name (e.g. do NOT use 'books' when the entity is 'ReadingEntry').")
+                lines.append(f"   CRITICAL — Do NOT rename props: App.jsx will pass 'undefined' for any name you invent, causing 'Cannot read properties of undefined' runtime errors.")
+                lines.append(f"   CRITICAL — Do NOT add useEffect or localStorage/seed data in this file. App.jsx handles all persistence. You only call setter props on mutations.")
+                lines.append(f"   CRITICAL — Form <input> values MUST come from local useState, NOT from props. Use <select> for type/category/status/currency fields.")
+                lines.append(f"   CRITICAL — Use crypto.randomUUID() for every new item id. Never use array[0] without checking .length first.")
+                if ";" in page_entity:
+                    lines.append(f"   MULTI-ENTITY PAGE: This page receives props for {page_entity.replace(';', ',')}. You MUST define handlers for EVERY entity you reference in JSX.")
+                if "dashboard" in bp.get("source_page", "").lower():
+                    lines.append(f"   DASHBOARD: This is a SUMMARY page — show counts, stats, recent activity. Do NOT include add/edit forms. Use navigation links/buttons instead.")
+                lines.append(f"   INPUT FIELD TYPES: date fields → type=\"date\", numeric fields (pages/count/price) → type=\"number\", type/category/status → <select>.")
+            elif bp_entity:
                 e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
                 p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
                 s_names = ["set" + e + "s" for e in e_names]
                 props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
                 lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
                 lines.append(f"   CRITICAL — Props passed by App.jsx: {{{props_str}}}. Function signature MUST be: function {bp.get('source_page', 'Page').replace(' ', '')}({{{props_str}}}).")
+                lines.append(f"   CRITICAL — The entity for this page is '{bp.get('source_entity', '')}'. The data prop is named '{p_names[0] if p_names else 'data'}' and the setter is named '{s_names[0] if s_names else 'setData'}'. You MUST use these EXACT names. Do NOT substitute a different entity name (e.g. do NOT use 'books' when the entity is 'ReadingEntry').")
+                lines.append(f"   CRITICAL — Do NOT rename props: App.jsx will pass 'undefined' for any name you invent, causing 'Cannot read properties of undefined' runtime errors.")
                 lines.append(f"   CRITICAL — Do NOT add useEffect or localStorage/seed data in this file. App.jsx handles all persistence. You only call setter props on mutations.")
                 lines.append(f"   CRITICAL — Form <input> values MUST come from local useState, NOT from props. Use <select> for type/category/status/currency fields.")
                 lines.append(f"   CRITICAL — Use crypto.randomUUID() for every new item id. Never use array[0] without checking .length first.")
+                if ";" in bp.get('source_entity', ''):
+                    lines.append(f"   MULTI-ENTITY PAGE: This page receives props for {bp.get('source_entity', '').replace(';', ',')}. You MUST define handlers for EVERY entity you reference in JSX.")
+                if "dashboard" in bp.get('source_page', '').lower():
+                    lines.append(f"   DASHBOARD: This is a SUMMARY page — show counts, stats, recent activity. Do NOT include add/edit forms. Use navigation links/buttons instead.")
+                lines.append(f"   INPUT FIELD TYPES: date fields → type=\"date\", numeric fields (pages/count/price) → type=\"number\", type/category/status → <select>.")
             else:
                 lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
         else:
             lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
 
     lines.extend([
+        "",
+        "### PROPS CONTRACT — every page MUST use these EXACT prop names:",
+        "Each page file below lists its EXACT props in the format:",
+        '  <PageName>({ propName, setPropName })',
+        "You MUST copy these names literally. Do NOT rename, shorten, or substitute.",
+        "If the prop is 'setReadingEntries', write 'setReadingEntries', NOT 'addReadingEntries', 'setBooks', or anything else.",
+        "FAILURE MODE: Renaming props causes 'TypeError: setX is not a function' at runtime because App.jsx passes the original names.",
         "",
         "Instructions:",
         "- Write file content with real newlines and real quotes.",

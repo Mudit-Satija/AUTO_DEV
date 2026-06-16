@@ -102,7 +102,8 @@ def _pascal_case(stem: str) -> str:
 
 
 def _sanitize_page_name(name: str) -> str:
-    clean = "".join(part.capitalize() for part in name.split())
+    parts = name.split()
+    clean = "".join(p[0].upper() + p[1:] if p else "" for p in parts)
     return clean if clean else "Page"
 
 
@@ -642,10 +643,18 @@ def _build_pages(
         else:
             page_path = f"frontend/src/pages/{safe}.js"
 
+        # Dashboard is a summary/stats page, NOT a data entry form
+        if name.lower() == "dashboard":
+            derived_purpose = f"{name} page — SUMMARY with counts/recent activity, NO add/edit forms"
+        elif purpose:
+            derived_purpose = purpose
+        else:
+            derived_purpose = f"{name} page"
+
         bp = {
             "path": page_path,
             "type": "page",
-            "purpose": purpose or f"{name} page",
+            "purpose": derived_purpose,
             "reason_for_existence": f"SRS page: {name}",
             "source_requirement": "page_definition",
             "source_page": name,
@@ -656,7 +665,7 @@ def _build_pages(
             "requirements": ["component export"],
         }
 
-        # Build api_calls spec from entities referenced by this page (backend only)
+        # Build spec from entities referenced by this page
         if has_backend:
             api_calls = []
             for pe in page_entities:
@@ -668,6 +677,19 @@ def _build_pages(
 
             if api_calls:
                 bp["spec"] = {"api_calls": api_calls}
+
+        # Frontend-only: store exact prop names in spec (single deterministic computation)
+        if not has_backend and page_entities:
+            prop_names = [e[0].lower() + e[1:] + "s" for e in page_entities]
+            setter_names = ["set" + e + "s" for e in page_entities]
+            props_parts = [f"{p}, {s}" for p, s in zip(prop_names, setter_names)]
+            funct_name = name.replace(" ", "")
+            bp["spec"] = {
+                "frontend_props": {
+                    "signature": f"function {funct_name}({{ {', '.join(props_parts)} }})",
+                    "destructure": ", ".join(props_parts),
+                }
+            }
 
         files.append(bp)
 

@@ -12,6 +12,14 @@ def _serialize_spec(spec: dict) -> List[str]:
     """Convert a blueprint spec into exact code template instructions."""
     lines: List[str] = []
 
+    if "frontend_props" in spec:
+        fp = spec["frontend_props"]
+        lines.append("")
+        lines.append(f"CRITICAL — COPY THIS EXACT FUNCTION SIGNATURE — do not change any prop name:")
+        lines.append(f"  {fp['signature']}")
+        lines.append("  If your component destructure differs, App.jsx will pass 'undefined' and the app will crash.")
+        lines.append("")
+
     if "api_calls" in spec:
         lines.append("This page calls these exact API endpoints — use no other URLs:")
         for call in spec["api_calls"]:
@@ -127,6 +135,7 @@ def build_file_prompt(
         lines.append("CRITICAL PAGE CONSTRAINTS — violating these causes the app to crash:")
         lines.append("- This file is at frontend/src/pages/<name>.jsx. Any relative import path starts from frontend/src/pages/, NOT from frontend/src/.")
         lines.append("- CRITICAL: NEVER import any CSS file (no imports ending in .css, e.g. do NOT import './App.css' or './styles.css' or 'styles.css'). Global styles are automatically loaded.")
+        lines.append("- CRITICAL: If this page receives entity data as props (e.g. 'books', 'readingEntries'), you MUST use those props directly for ALL rendering. Do NOT create independent useState copies of data that already exists in props. Compute derived values (counts, filtered lists, aggregates) from props in the render body — do not duplicate state.")
         lines.append("- CRITICAL: DO NOT import helper components, forms, cards, lists, modals, or page files (like './BudgetForm' or './BudgetList' or './Budget') from this pages directory. ALL sub-components, helper UI, forms, and dialogs MUST be defined inline as local functions/components inside this single page file.")
         lines.append("- In import statements, do NOT append file extensions (.js, .jsx, .ts, .tsx) to local imports. Use './Component' not './Component.jsx'. Vite resolves extensions automatically.")
         lines.append("- Every variable you use must be declared with useState or const. Never reference a variable that is not declared in this component.")
@@ -165,10 +174,30 @@ def build_file_prompt(
             lines.append("")
             lines.append(f"CRITICAL — App.jsx passes you these EXACT props: {{ {props_str} }}")
             lines.append(f"Your function signature MUST be: function {source_page.replace(' ', '')}({{ {props_str} }})")
+            lines.append(f"CRITICAL — The entity for this page is '{source_entity}'. The data prop '{prop_names[0] if prop_names else 'data'}' IS the entity data. The setter '{setter_names[0] if setter_names else 'setData'}' IS the state updater. Do NOT substitute a different entity name.")
+            lines.append("CRITICAL — Do NOT rename props. App.jsx will pass 'undefined' for any invented name, causing runtime crashes.")
             lines.append("Do NOT use useState for entity data — use the props directly.")
-            lines.append("Every mutation must update BOTH the setter AND localStorage in the same handler.")
+            lines.append("CRITICAL — Do NOT call localStorage.getItem or localStorage.setItem in this file. App.jsx is the SINGLE source of truth for all persistence. Only call the setter prop (e.g. setBooks) to update data. App.jsx watches state changes and persists automatically.")
+            lines.append("Do NOT add useEffect for reading/writing localStorage. App.jsx handles all persistence in its own useEffect.")
             lines.append("Use crypto.randomUUID() for new item IDs.")
             lines.append("If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
+            if ";" in source_entity:
+                lines.append("")
+                lines.append(f"MULTI-ENTITY PAGE: This page receives props for MULTIPLE entities ({source_entity.replace(';', ',')}). You MUST define handlers (add/edit/delete) for EVERY entity you interact with. For each entity data prop, create matching add/delete handler functions. Do NOT leave any entity without handlers if you reference them in JSX.")
+            # Input type guidance for date, number, and select fields
+            lines.append("")
+            lines.append("### INPUT FIELD TYPES:")
+            lines.append("- For date fields (field name containing 'date' or 'Date'): use <input type=\"date\" ... />")
+            lines.append("- For numeric fields (pages, count, amount, price, year): use <input type=\"number\" ... />")
+            lines.append("- For type/category/status/currency/format fields: use <select> with <option> values")
+            lines.append("- For all other text fields: use <input type=\"text\" ... /> (or just <input ... />)")
+        # Simple state variable naming rule
+        if source_entity and ";" not in source_entity:
+            lines.append("")
+            lines.append("### VARIABLE NAMING RULE:")
+            lines.append("- Name every form state variable after the EXACT entity field name from ENTITY OBJECT SHAPES above.")
+            lines.append("  Example: field 'author' → const [author, setAuthor] = useState('')")
+            lines.append("- Do NOT invent field names not listed in ENTITY OBJECT SHAPES.")
 
     if spec:
         lines.append("")
