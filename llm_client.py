@@ -27,7 +27,7 @@ def _rate_limit_pacer():
 
     
 DEFAULT_MODEL = "meta/llama-3.1-8b-instruct"                   
-CODER_MODEL = "deepseek-ai/deepseek-v4-flash"  
+CODER_MODEL = "mistralai/mistral-small-4-119b-2603"  
 PLANNER_MODEL = DEFAULT_MODEL
 
 print("=" * 60)
