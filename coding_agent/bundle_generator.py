@@ -12,6 +12,7 @@ from llm_client import CODER_MODEL, get_llm_response
 from coding_agent.file_generator import generate_file as generate_single_file
 from coding_agent.file_writer import write_file
 from coding_agent.file_registry import register_file
+from coding_agent.naming import entity_prop_name, entity_setter_name
 from coding_agent.prompt_constraints import build_prompt_constraints
 from coding_agent.metrics import get_metrics_collector
 
@@ -125,8 +126,8 @@ def build_bundle_prompt(
                 lines.append(f"   INPUT FIELD TYPES: date fields → type=\"date\", numeric fields (pages/count/price) → type=\"number\", type/category/status → <select>.")
             elif bp_entity:
                 e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
-                p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
-                s_names = ["set" + e + "s" for e in e_names]
+                p_names = [entity_prop_name(e) for e in e_names]
+                s_names = [entity_setter_name(e) for e in e_names]
                 props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
                 lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
                 lines.append(f"   CRITICAL — Props passed by App.jsx: {{{props_str}}}. Function signature MUST be: function {bp.get('source_page', 'Page').replace(' ', '')}({{{props_str}}}).")

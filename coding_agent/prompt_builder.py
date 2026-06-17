@@ -5,6 +5,8 @@ Prompts are driven entirely by blueprint specs and SRS lineage.
 """
 
 from typing import Any, Dict, List
+
+from coding_agent.naming import entity_prop_name, entity_setter_name
 from coding_agent.prompt_constraints import build_prompt_constraints
 
 
@@ -168,8 +170,8 @@ def build_file_prompt(
         # Derive props from source_entity (e.g., "Recipe; Favorite" -> recipes, favorites)
         if source_entity:
             entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
-            prop_names = [e[0].lower() + e[1:] + "s" for e in entity_names]
-            setter_names = ["set" + e + "s" for e in entity_names]
+            prop_names = [entity_prop_name(e) for e in entity_names]
+            setter_names = [entity_setter_name(e) for e in entity_names]
             props_str = ", ".join(f"{p}, {s}" for p, s in zip(prop_names, setter_names))
             lines.append("")
             lines.append(f"CRITICAL — App.jsx passes you these EXACT props: {{ {props_str} }}")

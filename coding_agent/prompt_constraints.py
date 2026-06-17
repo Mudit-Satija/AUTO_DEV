@@ -5,6 +5,8 @@ No auth constraints. All constraints are SRS-driven and tech-stack-aware.
 
 from typing import List, Optional
 
+from coding_agent.naming import entity_prop_name, entity_setter_name
+
 
 def database_kind(database: str) -> str:
     val = (database or "").strip().lower()
@@ -249,8 +251,8 @@ def build_prompt_constraints(
                         lines.append("  If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
                     elif source_entity:
                         entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
-                        prop_names = [e[0].lower() + e[1:] + "s" for e in entity_names]
-                        setter_names = ["set" + e + "s" for e in entity_names]
+                        prop_names = [entity_prop_name(e) for e in entity_names]
+                        setter_names = [entity_setter_name(e) for e in entity_names]
                         props_str = ", ".join(f"{p}, {s}" for p, s in zip(prop_names, setter_names))
                         comp_name = source_page.replace(" ", "") if source_page else "PageName"
                         lines.append(f"- CRITICAL — App.jsx passes these EXACT props to {bp_path}: {{ {props_str} }}")
@@ -284,8 +286,8 @@ def build_prompt_constraints(
                             bp_page = (bp.get("source_page") or "").strip()
                             if bp_entity:
                                 e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
-                                p_names = [e[0].lower() + e[1:] + "s" for e in e_names]
-                                s_names = ["set" + e + "s" for e in e_names]
+                                p_names = [entity_prop_name(e) for e in e_names]
+                                s_names = [entity_setter_name(e) for e in e_names]
                                 props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
                                 comp_name = bp_page.replace(" ", "") if bp_page else "Page"
                                 route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
@@ -353,8 +355,8 @@ def build_prompt_constraints(
                             e_names = [e.strip() for e in entity_str.split(";") if e.strip()]
                             props_parts = []
                             for e in e_names:
-                                data_name = e[0].lower() + e[1:] + "s"
-                                setter_name = "set" + e + "s"
+                                data_name = entity_prop_name(e)
+                                setter_name = entity_setter_name(e)
                                 props_parts.append(f"{data_name}={{{data_name}}}")
                                 props_parts.append(f"{setter_name}={{{setter_name}}}")
                             jsx_props = " ".join(props_parts)
@@ -362,8 +364,8 @@ def build_prompt_constraints(
                             # Page with no entity (like Dashboard) gets all aggregated entities
                             props_parts = []
                             for e in all_entity_names:
-                                data_name = e[0].lower() + e[1:] + "s"
-                                setter_name = "set" + e + "s"
+                                data_name = entity_prop_name(e)
+                                setter_name = entity_setter_name(e)
                                 props_parts.append(f"{data_name}={{{data_name}}}")
                                 props_parts.append(f"{setter_name}={{{setter_name}}}")
                             jsx_props = " ".join(props_parts)

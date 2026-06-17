@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+from coding_agent.naming import entity_prop_name, entity_setter_name
 
 def generate_build_plan(project_rules: dict) -> dict:
     """Convert project_rules (derived from SRS) into a structured build plan.
@@ -700,8 +701,8 @@ def _build_pages(
 
         # Frontend-only: store exact prop names in spec (single deterministic computation)
         if not has_backend and page_entities:
-            prop_names = [e[0].lower() + e[1:] + "s" for e in page_entities]
-            setter_names = ["set" + e + "s" for e in page_entities]
+            prop_names = [entity_prop_name(e) for e in page_entities]
+            setter_names = [entity_setter_name(e) for e in page_entities]
             props_parts = [f"{p}, {s}" for p, s in zip(prop_names, setter_names)]
             funct_name = name.replace(" ", "")
             bp["spec"] = {
