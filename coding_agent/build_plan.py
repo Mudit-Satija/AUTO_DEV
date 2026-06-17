@@ -59,7 +59,7 @@ def generate_build_plan(project_rules: dict) -> dict:
     has_backend = not is_frontend_only and bool(backend_fw)
 
     if is_frontend_only:
-        files.extend(_build_frontend_config(frontend_fw, has_backend=False))
+        files.extend(_build_frontend_config(frontend_fw, has_backend=False, project_name=project_name))
         files.extend(_build_pages(frontend_fw, pages, entities, has_backend=False))
         _wire_app_deps(files)
         _assign_bundles(files)
@@ -76,7 +76,7 @@ def generate_build_plan(project_rules: dict) -> dict:
     files.extend(_build_flow_endpoints(backend_fw, database, flow, entities))
 
     # Frontend config files
-    files.extend(_build_frontend_config(frontend_fw, has_backend))
+    files.extend(_build_frontend_config(frontend_fw, has_backend, project_name=project_name))
 
     # Frontend pages — ONLY from SRS.pages
     files.extend(_build_pages(frontend_fw, pages, entities, has_backend))
@@ -460,7 +460,7 @@ def _build_flow_endpoints(
     return files
 
 
-def _build_frontend_config(frontend_fw: str, has_backend: bool = True) -> List[Dict[str, Any]]:
+def _build_frontend_config(frontend_fw: str, has_backend: bool = True, project_name: str = "Untitled") -> List[Dict[str, Any]]:
     files = []
     is_ts = "typescript" in frontend_fw or "ts" in frontend_fw
     is_tailwind = "tailwind" in frontend_fw
@@ -482,26 +482,26 @@ def _build_frontend_config(frontend_fw: str, has_backend: bool = True) -> List[D
              "source_requirement": "tech_stack", "source_page": "", "source_entity": "", "source_flow": "",
              "depends_on": [], "provides": [], "requirements": [],
              "static_content": json.dumps({
-                 "name": "recipe-book",
-                 "private": True,
-                 "version": "1.0.0",
-                 "type": "module",
-                 "scripts": {
-                     "dev": "vite",
-                     "build": "vite build",
-                     "preview": "vite preview",
-                 },
-                  "dependencies": {
-                      "react": "^18.2.0",
-                      "react-dom": "^18.2.0",
-                      "react-router-dom": "^6.20.0",
-                      "uuid": "^9.0.0",
+                  "name": project_name.lower().replace(" ", "-") + "-frontend",
+                  "private": True,
+                  "version": "1.0.0",
+                  "type": "module",
+                  "scripts": {
+                      "dev": "vite",
+                      "build": "vite build",
+                      "preview": "vite preview",
                   },
-                 "devDependencies": {
-                     "@vitejs/plugin-react": "^4.2.0",
-                     "vite": "^5.0.0",
-                 },
-             }, indent=2)},
+                   "dependencies": {
+                       "react": "^18.2.0",
+                       "react-dom": "^18.2.0",
+                       "react-router-dom": "^6.20.0",
+                       "uuid": "^9.0.0",
+                   },
+                  "devDependencies": {
+                      "@vitejs/plugin-react": "^4.2.0",
+                      "vite": "^5.0.0",
+                  },
+              }, indent=2)},
             {"path": "frontend/.env", "type": "env",
              "purpose": "Frontend environment variables",
              "reason_for_existence": f"Tech stack: {frontend_fw}",
