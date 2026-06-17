@@ -76,7 +76,20 @@ async def generate_from_srs(request: dict) -> dict:
         entities = []
         for e in entities_raw:
             if isinstance(e, str) and e.strip():
-                entities.append({"name": e.strip(), "fields": ["name", "description", "createdAt"], "description": ""})
+                txt = e.strip()
+                colon_idx = txt.index(":") if ":" in txt else -1
+                if colon_idx >= 0:
+                    name = txt[:colon_idx].strip()
+                    fields_str = txt[colon_idx + 1:].strip()
+                    # Strip optional brackets [field1, field2]
+                    if fields_str.startswith("[") and fields_str.endswith("]"):
+                        fields_str = fields_str[1:-1].strip()
+                    fields = [f.strip() for f in fields_str.split(",") if f.strip()]
+                    if not fields:
+                        fields = ["name", "description", "createdAt"]
+                    entities.append({"name": name, "fields": fields, "description": ""})
+                else:
+                    entities.append({"name": txt, "fields": ["name", "description", "createdAt"], "description": ""})
             elif isinstance(e, dict):
                 entities.append(e)
 

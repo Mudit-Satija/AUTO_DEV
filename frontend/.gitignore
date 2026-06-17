@@ -80,6 +80,7 @@ Thumbs.db
 ehthumbs.db
 
 # Node (if you add frontend later)
+.next/
 node_modules/
 npm-debug.log
 yarn-error.log

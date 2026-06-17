@@ -25,9 +25,42 @@ const STAGES: ProgressStage[] = [
 
 type ProgressState = "pending" | "active" | "done";
 
-function parseList(raw: string): string[] {
+function parsePages(raw: string): string[] {
+  // Pages: simple list of names, comma or newline separated
   return raw
     .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function parseEntities(raw: string): string[] {
+  // Entities: one per line — "EntityName: field1, field2, field3"
+  // Split on newlines ONLY; commas separate fields within a definition
+  const result: string[] = [];
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // Parse "Name: field1, field2" into structured tag
+    const colonIdx = trimmed.indexOf(":");
+    if (colonIdx >= 0) {
+      const name = trimmed.slice(0, colonIdx).trim();
+      const fields = trimmed
+        .slice(colonIdx + 1)
+        .split(",")
+        .map((f) => f.trim())
+        .filter((f) => f.length > 0);
+      result.push(`${name}: [${fields.join(", ")}]`);
+    } else {
+      result.push(trimmed);
+    }
+  }
+  return result;
+}
+
+function parseFlow(raw: string): string[] {
+  // Flow: one step per line — each line is a full sentence that may contain commas
+  return raw
+    .split("\n")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
@@ -72,9 +105,9 @@ export default function InteractiveChat() {
   const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchStartRef = useRef<number>(0);
 
-  const parsedPages = useMemo(() => parseList(pagesRaw), [pagesRaw]);
-  const parsedEntities = useMemo(() => parseList(entitiesRaw), [entitiesRaw]);
-  const parsedFlow = useMemo(() => parseList(flowRaw), [flowRaw]);
+  const parsedPages = useMemo(() => parsePages(pagesRaw), [pagesRaw]);
+  const parsedEntities = useMemo(() => parseEntities(entitiesRaw), [entitiesRaw]);
+  const parsedFlow = useMemo(() => parseFlow(flowRaw), [flowRaw]);
 
   const clearStageTimer = useCallback(() => {
     if (stageTimerRef.current) {
