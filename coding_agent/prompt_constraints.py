@@ -199,8 +199,10 @@ def build_prompt_constraints(
             "- In import statements, do NOT append file extensions (.js, .jsx, .ts, .tsx) to local imports. Vite resolves them automatically. Use './App' not './App.jsx'.",
             "- DO NOT import or use sub-components (like Form, List, Card, Modal, etc.) from other files. Write all helper components, forms, and dialogs INLINE inside the same file.",
             "- NEVER import components, forms, helper functions, page files, or anything else from other page files in the 'src/pages' directory (e.g., do NOT import Budget from './Budget'). All helper components must be defined inline within the same file.",
-            "- CRITICAL: Do NOT add Update/Edit buttons that use navigate() or <Link to> with a dynamic ID segment (e.g. `/tasks/123`, `/books/abc`). There are NO dynamic routes like `/tasks/:id`. Every route is a static path listed in App.jsx. Use inline toggle/delete on the same page instead of navigating to an edit page.",
-            "- CRITICAL: Do NOT use navigate() to go to any path that is not listed in App.jsx's routing table. Only the exact paths from the nav links are valid."
+            "- CRITICAL: Do NOT use navigate() to go to any path that is not listed in App.jsx's routing table. Only the exact paths from the nav links are valid.",
+            "- CRITICAL: For detail pages (routes containing ':param' like /order-detail/:orderId), navigation MUST use a template literal with the actual ID:",
+            "  <Link to={`/order-detail/${order.id}`}>View Details</Link>",
+            "  Do NOT link to the static path without the actual ID value."
         ])
         
         # CSS classes and visual standards
@@ -373,13 +375,20 @@ def build_prompt_constraints(
                             jsx_props = "data={data} setData={setData}"
                     nav_label = page_name if page_name else "Page"
                     routing_table_lines.append(f"  <Route path='{route}' element={{<{comp_name} {jsx_props} />}} />")
-                    routing_table_lines.append(f"  <Link to='{route}'>{nav_label}</Link>")
+                    route_param = pbp.get("route_param", "")
+                    if route_param:
+                        entity_prop = route_param.replace("Id", "")
+                        link_to = f"{{`/{page_name.lower().replace(' ', '-')}/${{{entity_prop}.id}}`}}"
+                        routing_table_lines.append(f"  <Link to={link_to}>{nav_label}</Link>  (uses template literal with {entity_prop}.id)")
+                    else:
+                        routing_table_lines.append(f"  <Link to='{route}'>{nav_label}</Link>")
                 if home_page_name:
                     routing_table_lines.append(f"  (Dashboard at '{home_route}' is the home/index page)")
                 routing_table_lines.append("")
                 routing_table_lines.append("Do not add, remove, or rename any route or link path. Copy every character exactly as shown above.")
                 routing_table_lines.append("CRITICAL CONSTRAINT: Dashboard MUST be at '/'. Do NOT create a separate '/dashboard' route. If you create '<Link to=\"/dashboard\">' or '<Route path=\"/dashboard\">', your output FAILS.")
-                routing_table_lines.append("CRITICAL CONSTRAINT: Do NOT add ANY route or nav link beyond what is listed above. If it is not in this table, it does not exist. Do NOT add dynamic routes like '/tasks/:id' or '/books/:id'.")
+                routing_table_lines.append("CRITICAL CONSTRAINT: Do NOT add ANY route or nav link beyond what is listed above. If it is not in this table, it does not exist.")
+                routing_table_lines.append("CRITICAL: For routes containing ':param' (e.g. '/order-detail/:orderId'), pages that LINK to this page MUST use a template literal: <Link to={`/order-detail/${order.id}`}>View Details</Link>. Do NOT use the literal ':param' string in the link path.")
                 lines.extend(routing_table_lines)
             
             lines.extend([

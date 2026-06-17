@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from coding_agent.naming import entity_prop_name, entity_setter_name
+from coding_agent.naming import entity_param_name, entity_prop_name, entity_setter_name
 
 def generate_build_plan(project_rules: dict) -> dict:
     """Convert project_rules (derived from SRS) into a structured build plan.
@@ -671,6 +671,14 @@ def _build_pages(
         else:
             derived_purpose = f"{name} page"
 
+        route_path = _page_route_path(name)
+        route_param = ""
+        # Dynamic route for detail pages (e.g. "Order Detail" -> /order-detail/:orderId)
+        if "detail" in name.lower() and page_entities:
+            entity = page_entities[0]
+            route_param = entity_param_name(entity)
+            route_path = route_path + "/:" + route_param
+
         bp = {
             "path": page_path,
             "type": "page",
@@ -683,7 +691,8 @@ def _build_pages(
             "depends_on": [],
             "provides": [],
             "requirements": ["component export"],
-            "route_path": _page_route_path(name),
+            "route_path": route_path,
+            "route_param": route_param,
         }
 
         # Build spec from entities referenced by this page

@@ -12,7 +12,7 @@ from llm_client import CODER_MODEL, get_llm_response
 from coding_agent.file_generator import generate_file as generate_single_file
 from coding_agent.file_writer import write_file
 from coding_agent.file_registry import register_file
-from coding_agent.naming import entity_prop_name, entity_setter_name
+from coding_agent.naming import entity_param_name, entity_prop_name, entity_setter_name
 from coding_agent.prompt_constraints import build_prompt_constraints
 from coding_agent.metrics import get_metrics_collector
 
@@ -101,6 +101,8 @@ def build_bundle_prompt(
     for i, bp in enumerate(file_blueprints, 1):
         bp_path = bp.get("path", "")
         purpose = bp.get("purpose", "")
+        page_name = bp.get("source_page", "")
+        route_param = bp.get("route_param", "")
         if is_frontend_only and "/pages/" in bp_path:
             bp_entity = (bp.get("source_entity") or "").strip()
             # Prefer spec-stored props (single deterministic computation)
@@ -118,31 +120,42 @@ def build_bundle_prompt(
                 lines.append(f"   CRITICAL — Do NOT rename props: App.jsx will pass 'undefined' for any name you invent, causing 'Cannot read properties of undefined' runtime errors.")
                 lines.append(f"   CRITICAL — Do NOT add useEffect or localStorage/seed data in this file. App.jsx handles all persistence. You only call setter props on mutations.")
                 lines.append(f"   CRITICAL — Form <input> values MUST come from local useState, NOT from props. Use <select> for type/category/status/currency fields.")
+                lines.append(f"   CRITICAL — Do NOT hardcode placeholder values like '-', '$0.00', or 'N/A'. Compute REAL values from props (e.g. products.length for total count).")
                 lines.append(f"   CRITICAL — Use crypto.randomUUID() for every new item id. Never use array[0] without checking .length first.")
                 if ";" in page_entity:
                     lines.append(f"   MULTI-ENTITY PAGE: This page receives props for {page_entity.replace(';', ',')}. You MUST define handlers for EVERY entity you reference in JSX.")
-                if "dashboard" in bp.get("source_page", "").lower():
-                    lines.append(f"   DASHBOARD: This is a SUMMARY page — show counts, stats, recent activity. Do NOT include add/edit forms. Use navigation links/buttons instead.")
+                if "dashboard" in page_name.lower():
+                    lines.append(f"   DASHBOARD: This is a SUMMARY page — MUST compute and display REAL counts/stats from the entity props (e.g. total products = products.length, total orders = orders.length, revenue = orders.reduce(...)). Do NOT hardcode '-' or '$0.00'. Do NOT include add/edit forms.")
                 lines.append(f"   INPUT FIELD TYPES: date fields → type=\"date\", numeric fields (pages/count/price) → type=\"number\", type/category/status → <select>.")
+                if route_param:
+                    lines.append(f"   DYNAMIC ROUTE: Mounted at route with :{route_param}. Use `const {{ {route_param} }} = useParams()` and import `useParams` from 'react-router-dom'. Find the matching record: data.find(d => d.id === {route_param}).")
             elif bp_entity:
                 e_names = [e.strip() for e in bp_entity.split(";") if e.strip()]
                 p_names = [entity_prop_name(e) for e in e_names]
                 s_names = [entity_setter_name(e) for e in e_names]
                 props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
                 lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
-                lines.append(f"   CRITICAL — Props passed by App.jsx: {{{props_str}}}. Function signature MUST be: function {bp.get('source_page', 'Page').replace(' ', '')}({{{props_str}}}).")
+                lines.append(f"   CRITICAL — Props passed by App.jsx: {{{props_str}}}. Function signature MUST be: function {page_name.replace(' ', '')}({{{props_str}}}).")
                 lines.append(f"   CRITICAL — The entity for this page is '{bp.get('source_entity', '')}'. The data prop is named '{p_names[0] if p_names else 'data'}' and the setter is named '{s_names[0] if s_names else 'setData'}'. You MUST use these EXACT names. Do NOT substitute a different entity name (e.g. do NOT use 'books' when the entity is 'ReadingEntry').")
                 lines.append(f"   CRITICAL — Do NOT rename props: App.jsx will pass 'undefined' for any name you invent, causing 'Cannot read properties of undefined' runtime errors.")
                 lines.append(f"   CRITICAL — Do NOT add useEffect or localStorage/seed data in this file. App.jsx handles all persistence. You only call setter props on mutations.")
                 lines.append(f"   CRITICAL — Form <input> values MUST come from local useState, NOT from props. Use <select> for type/category/status/currency fields.")
+                lines.append(f"   CRITICAL — Do NOT hardcode placeholder values like '-', '$0.00', or 'N/A'. Compute REAL values from props (e.g. products.length for total count).")
                 lines.append(f"   CRITICAL — Use crypto.randomUUID() for every new item id. Never use array[0] without checking .length first.")
                 if ";" in bp.get('source_entity', ''):
                     lines.append(f"   MULTI-ENTITY PAGE: This page receives props for {bp.get('source_entity', '').replace(';', ',')}. You MUST define handlers for EVERY entity you reference in JSX.")
-                if "dashboard" in bp.get('source_page', '').lower():
-                    lines.append(f"   DASHBOARD: This is a SUMMARY page — show counts, stats, recent activity. Do NOT include add/edit forms. Use navigation links/buttons instead.")
+                if "dashboard" in page_name.lower():
+                    lines.append(f"   DASHBOARD: This is a SUMMARY page — MUST compute and display REAL counts/stats from the entity props (e.g. total products = products.length, total orders = orders.length, revenue = orders.reduce(...)). Do NOT hardcode '-' or '$0.00'. Do NOT include add/edit forms.")
                 lines.append(f"   INPUT FIELD TYPES: date fields → type=\"date\", numeric fields (pages/count/price) → type=\"number\", type/category/status → <select>.")
+                if route_param:
+                    lines.append(f"   DYNAMIC ROUTE: Mounted at route with :{route_param}. Use `const {{ {route_param} }} = useParams()` and import `useParams` from 'react-router-dom'. Find the matching record: data.find(d => d.id === {route_param}).")
             else:
                 lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
+                lines.append(f"   CRITICAL — Do NOT hardcode placeholder values like '-', '$0.00', or 'N/A'. Compute REAL values from any props received.")
+                if "dashboard" in page_name.lower():
+                    lines.append(f"   DASHBOARD: This is a SUMMARY page — MUST compute and display REAL counts/stats from the entity props. Do NOT hardcode '-' or '$0.00'.")
+                if route_param:
+                    lines.append(f"   DYNAMIC ROUTE: Mounted at route with :{route_param}. Use `const {{ {route_param} }} = useParams()` and import `useParams` from 'react-router-dom'.")
         else:
             lines.append(f"{i}. Path: {bp_path} — Purpose: {purpose}")
 

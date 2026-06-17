@@ -167,7 +167,22 @@ def build_file_prompt(
     # Page files in frontend-only projects: concrete props + data flow
     is_frontend_only = backend_fw in ("", "none", "frontend only")
     if file_type == "page" and is_frontend_only:
-        # Derive props from source_entity (e.g., "Recipe; Favorite" -> recipes, favorites)
+        # ── Generic prop-usage for ALL pages (Dashboard included) ──
+        lines.append("")
+        lines.append("### PROP USAGE RULES:")
+        lines.append("- If this page receives entity data as props, you MUST use those props directly for ALL rendering.")
+        lines.append("  Compute derived values (counts, totals, filtered lists, aggregates) from props in the render body.")
+        lines.append("  Do NOT create independent useState copies of data that already exists in props.")
+        lines.append("  Do NOT hardcode placeholder text like '-', '$0.00', or 'N/A' for values that should be computed.")
+        lines.append("  Display REAL computed values from props (e.g. products.length, orders.filter(...).length).")
+        lines.append("  If a prop array is empty, show 0 or an appropriate empty state — never a static placeholder.")
+        lines.append("- Do NOT read or write localStorage. App.jsx is the SINGLE source of truth for all persistence.")
+        lines.append("  Only call setter props (e.g. setProducts) to update data. App.jsx watches and persists automatically.")
+        lines.append("- Do NOT add useEffect for localStorage or API calls in this file.")
+        lines.append("- Use crypto.randomUUID() for new item IDs.")
+        lines.append("- If using <Link>, <NavLink>, or <Navigate>, import from 'react-router-dom'.")
+
+        # ── Entity-specific prop names (only when source_entity is set) ──
         if source_entity:
             entity_names = [e.strip() for e in source_entity.split(";") if e.strip()]
             prop_names = [entity_prop_name(e) for e in entity_names]
@@ -176,30 +191,42 @@ def build_file_prompt(
             lines.append("")
             lines.append(f"CRITICAL — App.jsx passes you these EXACT props: {{ {props_str} }}")
             lines.append(f"Your function signature MUST be: function {source_page.replace(' ', '')}({{ {props_str} }})")
-            lines.append(f"CRITICAL — The entity for this page is '{source_entity}'. The data prop '{prop_names[0] if prop_names else 'data'}' IS the entity data. The setter '{setter_names[0] if setter_names else 'setData'}' IS the state updater. Do NOT substitute a different entity name.")
+            lines.append(f"CRITICAL — The entity for this page is '{source_entity}'. The data prop '{prop_names[0] if prop_names else 'data'}' IS the entity data.")
             lines.append("CRITICAL — Do NOT rename props. App.jsx will pass 'undefined' for any invented name, causing runtime crashes.")
-            lines.append("Do NOT use useState for entity data — use the props directly.")
-            lines.append("CRITICAL — Do NOT call localStorage.getItem or localStorage.setItem in this file. App.jsx is the SINGLE source of truth for all persistence. Only call the setter prop (e.g. setBooks) to update data. App.jsx watches state changes and persists automatically.")
-            lines.append("Do NOT add useEffect for reading/writing localStorage. App.jsx handles all persistence in its own useEffect.")
-            lines.append("Use crypto.randomUUID() for new item IDs.")
-            lines.append("If your JSX uses <Link>, <NavLink>, or <Navigate>, you MUST import it from 'react-router-dom'.")
+
             if ";" in source_entity:
                 lines.append("")
-                lines.append(f"MULTI-ENTITY PAGE: This page receives props for MULTIPLE entities ({source_entity.replace(';', ',')}). You MUST define handlers (add/edit/delete) for EVERY entity you interact with. For each entity data prop, create matching add/delete handler functions. Do NOT leave any entity without handlers if you reference them in JSX.")
-            # Input type guidance for date, number, and select fields
+                lines.append(f"MULTI-ENTITY PAGE: This page receives props for MULTIPLE entities ({source_entity.replace(';', ',')}). You MUST define handlers for EVERY entity you interact with.")
+
+            # Input type guidance
             lines.append("")
             lines.append("### INPUT FIELD TYPES:")
             lines.append("- For date fields (field name containing 'date' or 'Date'): use <input type=\"date\" ... />")
             lines.append("- For numeric fields (pages, count, amount, price, year): use <input type=\"number\" ... />")
             lines.append("- For type/category/status/currency/format fields: use <select> with <option> values")
             lines.append("- For all other text fields: use <input type=\"text\" ... /> (or just <input ... />)")
-        # Simple state variable naming rule
-        if source_entity and ";" not in source_entity:
+
+            # Simple state variable naming rule
+            if ";" not in source_entity:
+                lines.append("")
+                lines.append("### VARIABLE NAMING RULE:")
+                lines.append("- Name every form state variable after the EXACT entity field name from ENTITY OBJECT SHAPES above.")
+                lines.append("  Example: field 'author' → const [author, setAuthor] = useState('')")
+                lines.append("- Do NOT invent field names not listed in ENTITY OBJECT SHAPES.")
+
+        # ── Dynamic route param extraction (for detail pages like OrderDetail) ──
+        route_path = file_blueprint.get("route_path", "")
+        route_param = file_blueprint.get("route_param", "")
+        if ":" in route_path and route_param:
             lines.append("")
-            lines.append("### VARIABLE NAMING RULE:")
-            lines.append("- Name every form state variable after the EXACT entity field name from ENTITY OBJECT SHAPES above.")
-            lines.append("  Example: field 'author' → const [author, setAuthor] = useState('')")
-            lines.append("- Do NOT invent field names not listed in ENTITY OBJECT SHAPES.")
+            lines.append(f"### DYNAMIC ROUTE PARAM:")
+            lines.append(f"This page is mounted at route: {route_path}")
+            lines.append("Extract the URL parameter using react-router-dom's useParams():")
+            lines.append("  import { useParams } from 'react-router-dom';")
+            lines.append(f"  const {{ {route_param} }} = useParams();")
+            lines.append(f"Use this {route_param} value to find and display the matching record")
+            lines.append("from your props (e.g. orders.find(o => o.id === orderId)).")
+            lines.append("Do NOT use window.location.search or any other method to read URL parameters — useParams() is the only correct approach.")
 
     if spec:
         lines.append("")

@@ -31,3 +31,11 @@ def entity_setter_name(entity_name: str) -> str:
     Example: 'Book' -> 'setBooks', 'ReadingEntry' -> 'setReadingEntries'
     """
     return "set" + _pluralize(entity_name)
+
+
+def entity_param_name(entity_name: str) -> str:
+    """Derive the URL route parameter name from an entity name.
+
+    Example: 'Order' -> 'orderId', 'Product' -> 'productId'
+    """
+    return entity_name[0].lower() + entity_name[1:] + "Id"
