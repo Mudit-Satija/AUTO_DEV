@@ -689,7 +689,7 @@ def _build_pages(
             "source_entity": "; ".join(page_entities) if page_entities else "",
             "source_flow": "",
             "depends_on": [],
-            "provides": [],
+            "provides": [f"default export: {_sanitize_page_name(name)} (React component)"],
             "requirements": ["component export"],
             "route_path": route_path,
             "route_param": route_param,

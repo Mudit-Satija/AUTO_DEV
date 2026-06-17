@@ -131,6 +131,40 @@ def build_file_prompt(
                 else:
                     lines.append(f"- {dep_path}")
 
+    # App.jsx / App.tsx — inject literal import statements for every page component
+    # This eliminates the "undefined component" crash: the LLM sees exact imports to write
+    # rather than having to infer them from file paths.
+    app_paths = ("frontend/src/App.jsx", "frontend/src/App.tsx", "frontend/src/App.vue")
+    if file_path in app_paths and all_blueprints:
+        page_bps = [bp for bp in all_blueprints if bp.get("type") == "page"]
+        if page_bps:
+            lines.append("")
+            lines.append("### CRITICAL — You MUST include these exact import statements at the top of App.jsx,")
+            lines.append("one per page, BEFORE the component definition. Do NOT omit any:")
+            lines.append("")
+            for bp in page_bps:
+                src_path = bp.get("path", "")
+                src_page = bp.get("source_page", "")
+                comp_name = src_page.replace(" ", "") if src_page else "Page"
+                # Convert frontend/src/pages/Foo.jsx -> ./pages/Foo
+                import_path = src_path
+                # Strip frontend/src/ prefix to get relative path from App.jsx location
+                for prefix in ("frontend/src/", "frontend/"):
+                    if import_path.startswith(prefix):
+                        import_path = "." + import_path[len(prefix):]
+                        break
+                # Strip extension
+                for ext in (".jsx", ".tsx", ".js", ".ts", ".vue"):
+                    if import_path.endswith(ext):
+                        import_path = import_path[:-len(ext)]
+                        break
+                lines.append(f"  import {comp_name} from '{import_path}';")
+            lines.append("")
+            lines.append("CRITICAL CHECK — Before finalizing, verify: every <ComponentName /> used in")
+            lines.append("your <Routes> JSX MUST have a corresponding import statement above.")
+            lines.append("If a component is missing from the imports, add it now.")
+            lines.append("")
+
     # Page-specific code quality rules
     if file_type == "page":
         lines.append("")

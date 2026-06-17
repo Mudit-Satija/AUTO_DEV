@@ -367,6 +367,74 @@ def _add_missing_router_import(content: str) -> str:
     return "\n".join(lines)
 
 
+def _add_missing_page_imports_for_app(output_dir: str, root: str) -> None:
+    """Safety net: scan App.jsx for page components referenced in JSX but not imported.
+    Injects missing import statements at the top of App.jsx.
+    """
+    import os
+    import re
+
+    app_path = os.path.join(root, "frontend", "src", "App.jsx")
+    app_path_ts = os.path.join(root, "frontend", "src", "App.tsx")
+    pages_dir = os.path.join(root, "frontend", "src", "pages")
+
+    app_file = app_path if os.path.isfile(app_path) else (app_path_ts if os.path.isfile(app_path_ts) else None)
+    if not app_file or not os.path.isdir(pages_dir):
+        return
+
+    with open(app_file, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Discover page components from pages/ directory
+    page_components = {}
+    for fname in os.listdir(pages_dir):
+        name, ext = os.path.splitext(fname)
+        if ext in (".jsx", ".tsx", ".js", ".ts", ".vue"):
+            # Convert kebab-case or snake_case filename to PascalCase component name
+            comp_name = "".join(word.capitalize() for word in re.split(r"[-_]", name))
+            page_components[comp_name] = fname
+
+    if not page_components:
+        return
+
+    # Find capitalized JSX tags used in content (e.g. <Dashboard, <TaskDetail)
+    used_tags = set(re.findall(r'<([A-Z][a-zA-Z0-9]*)\b', content))
+
+    # Find which used tags are actually imported
+    existing_imports = set(re.findall(r'import\s+([A-Z][a-zA-Z0-9]*)\s+from', content))
+
+    missing = []
+    for tag in used_tags:
+        if tag in page_components and tag not in existing_imports:
+            fname = page_components[tag]
+            import_path = f"./pages/{os.path.splitext(fname)[0]}"
+            missing.append((tag, import_path))
+
+    if not missing:
+        return
+
+    # Inject missing imports after last existing import or at top of file
+    lines = content.split("\n")
+    insert_idx = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("import ") or stripped.startswith("// "):
+            insert_idx = i + 1
+        elif stripped.startswith("/*"):
+            insert_idx = i + 1
+        else:
+            break
+
+    # Insert in reverse order so line numbers stay correct
+    for tag, import_path in reversed(missing):
+        stmt = f"import {tag} from '{import_path}';"
+        lines.insert(insert_idx, stmt)
+        logger.info("  auto-added missing page import: %s", stmt)
+
+    with open(app_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+
 def post_process_generated_files(output_dir: str) -> None:
     """Fix common LLM code generation errors via string replacement.
     Runs after all files are written and before zipping.
@@ -486,3 +554,7 @@ def post_process_generated_files(output_dir: str) -> None:
             logger.info("post_process: fixed %s", filepath)
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
+
+    # 8. Safety net: inject missing page component imports into App.jsx
+    #     (catches cases where the prompt fix didn't fully take)
+    _add_missing_page_imports_for_app(output_dir, root)
