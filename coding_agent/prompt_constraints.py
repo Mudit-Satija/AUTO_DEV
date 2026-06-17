@@ -174,17 +174,41 @@ def build_prompt_constraints(
     entities = srs.get("entities", []) or []
     if entities and bundle_type in ("frontend", "backend", "database"):
         lines.append("")
-        lines.append("### ENTITY OBJECT SHAPES — copy these exact key names character-for-character:")
+        lines.append("### ENTITY OBJECT SHAPES — copy these exact key names and types character-for-character:")
+
+        def _field_type(field_name: str) -> str:
+            """Infer JavaScript type from field name, matching prompt_builder.py HTML input-type heuristics."""
+            low = field_name.lower()
+            # numeric keywords aligned with prompt_builder INPUT FIELD TYPES heuristic
+            if low in ("id",):
+                return "string"
+            if low in ("pages", "count", "amount", "price", "year", "stock", "total", "rating", "quantity", "age", "size", "score", "version"):
+                return "number"
+            if low.endswith("id"):
+                return "string"
+            if "date" in low or "time" in low:
+                return "string (ISO date string)"
+            return "string"
+
         for e in entities:
             name = e.get("name", "")
             fields = e.get("fields", [])
             if name and fields:
-                lines.append(f"  - {name} — every object MUST have exactly this shape (do NOT abbreviate or use single-letter keys):")
+                lines.append(f"  - {name} — every object MUST have exactly this shape, with these EXACT JavaScript types:")
                 lines.append("    {")
                 for f in fields:
-                    lines.append(f"      {f}: ...,")
+                    ft = _field_type(f)
+                    lines.append(f"      {f}: {ft},")
                 lines.append("    }")
         if bundle_type == "frontend":
+            lines.append("")
+            lines.append("### CRITICAL — numeric fields MUST be stored as JavaScript numbers, never as strings:")
+            lines.append("  - When reading from a form input, convert immediately with Number(e.target.value)")
+            lines.append("    or parseFloat(e.target.value). Do NOT call .toFixed() when STORING a value —")
+            lines.append("    that converts it to a string. Only call .toFixed() when DISPLAYING a number in JSX,")
+            lines.append("    never when saving to state/localStorage.")
+            lines.append("  - Example: input[type=number] returns a string. Always do: const [price, setPrice] = useState('');")
+            lines.append("    then on save: setProducts([...products, { ...other, price: Number(price) }])")
             lines.append("")
             lines.append("### VARIABLE NAMING RULE:")
             lines.append("- Name every form state variable after the EXACT entity field name from the shape above.")
@@ -274,6 +298,16 @@ def build_prompt_constraints(
                     "",
                     "CRITICAL — each page below expects these EXACT props from App.jsx. Do NOT omit any prop:",
                 ]
+                # Aggregate all unique entity names across ALL pages (for Dashboard which has no specific entity)
+                all_page_bps = [bp for bp in all_files if "/pages/" in bp.get("path", "")]
+                global_entity_names = []
+                for pbp in all_page_bps:
+                    entity_str = pbp.get("source_entity", "").strip()
+                    if entity_str:
+                        for e in entity_str.split(";"):
+                            e = e.strip()
+                            if e and e not in global_entity_names:
+                                global_entity_names.append(e)
                 for bp in all_files:
                     bp_path = bp.get("path", "")
                     if "/pages/" in bp_path:
@@ -293,27 +327,30 @@ def build_prompt_constraints(
                                 props_str = ", ".join(f"{p}, {s}" for p, s in zip(p_names, s_names))
                                 comp_name = bp_page.replace(" ", "") if bp_page else "Page"
                                 route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
+                            elif global_entity_names:
+                                # Page with no entity (like Dashboard) gets all aggregated entities
+                                props_parts = []
+                                for e in global_entity_names:
+                                    p = entity_prop_name(e)
+                                    s = entity_setter_name(e)
+                                    props_parts.append(f"{p}, {s}")
+                                props_str = ", ".join(props_parts)
+                                comp_name = bp_page.replace(" ", "") if bp_page else "Page"
+                                route_lines.append(f"  - {comp_name} expects: {{{props_str}}}")
                 if len(route_lines) > 2:
                     lines.extend(route_lines)
                 lines.append("CRITICAL — Use these EXACT prop variable names when passing props to each page. Do NOT rename them. Every page's destructured parameter names MUST match exactly what you pass in the JSX.")
                 # Literal routing table — computed from build plan, LLM must copy verbatim
                 routing_table_lines = ["", "### EXACT ROUTES AND NAV LINKS — copy these verbatim, do not add/remove/rename:", ""]
-                page_bps = [bp for bp in (file_blueprints or []) if "/pages/" in bp.get("path", "")]
+                page_bps = [bp for bp in (project_rules.get("all_files", []) or []) if "/pages/" in bp.get("path", "")]
                 # Determine the home route page (Dashboard) if present
                 home_route = "/"
                 home_page_name = None
-                # Aggregate all unique entity names across all pages (for Dashboard which has no specific entity)
-                all_entity_names = []
                 for pbp in page_bps:
                     pn = pbp.get("source_page", "")
                     if pn.lower() == "dashboard":
                         home_page_name = pn
-                    entity_str = pbp.get("source_entity", "").strip()
-                    if entity_str:
-                        for e in entity_str.split(";"):
-                            e = e.strip()
-                            if e and e not in all_entity_names:
-                                all_entity_names.append(e)
+                        break
                 # Build route map dict for JSON block
                 route_map = {}  # comp_name -> route
                 nav_links = {}  # route -> nav_label
@@ -362,10 +399,10 @@ def build_prompt_constraints(
                                 props_parts.append(f"{data_name}={{{data_name}}}")
                                 props_parts.append(f"{setter_name}={{{setter_name}}}")
                             jsx_props = " ".join(props_parts)
-                        elif all_entity_names:
+                        elif global_entity_names:
                             # Page with no entity (like Dashboard) gets all aggregated entities
                             props_parts = []
-                            for e in all_entity_names:
+                            for e in global_entity_names:
                                 data_name = entity_prop_name(e)
                                 setter_name = entity_setter_name(e)
                                 props_parts.append(f"{data_name}={{{data_name}}}")
