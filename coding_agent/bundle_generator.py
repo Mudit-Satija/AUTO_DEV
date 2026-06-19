@@ -227,9 +227,17 @@ def build_bundle_prompt(
         lines.append("- Use Vite environment variables (import.meta.env.VITE_*), not process.env.REACT_APP_*.")
         if has_backend:
             lines.append("- The api.js service: const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL }); export default api;")
-            lines.append("- All page files must import api with: import api from '../services/api'")
-            lines.append("- Pages use api directly: api.get('/products'), api.post('/products', body), api.put('/products/:id', body), api.delete('/products/:id')")
-            lines.append("- Do NOT create named export wrappers like 'productApi' or 'orderApi' in api.js. Pages call api.get() directly with the endpoint path.")
+            # Scope ../services/api instruction to page files only — App.jsx should never import api
+            has_page_file = any(
+                bp.get("type") == "page" or "/pages/" in bp.get("path", "")
+                for bp in file_blueprints
+            )
+            if has_page_file:
+                lines.append("- All page files must import api with: import api from '../services/api'")
+                lines.append("- Pages use api directly: api.get('/products'), api.post('/products', body), api.put('/products/:id', body), api.delete('/products/:id')")
+                lines.append("- Do NOT create named export wrappers like 'productApi' or 'orderApi' in api.js. Pages call api.get() directly with the endpoint path.")
+            else:
+                lines.append("- App.jsx handles routing only — it does NOT import api.js. Only page files import api directly.")
 
     return "\n".join(lines)
 

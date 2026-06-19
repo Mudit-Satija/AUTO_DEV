@@ -445,6 +445,7 @@ def post_process_generated_files(output_dir: str) -> None:
     - CSS imports in page files (App.css import in pages/*.jsx)
     - Mongoose import paths in backend models
     - '../services/*' imports in frontend-only projects (safety net)
+    - api import from App.jsx (router component, never needs api.js)
     """
     import glob as glob_mod
     import os
@@ -550,11 +551,23 @@ def post_process_generated_files(output_dir: str) -> None:
         if '/pages/' in norm_path and norm_path.endswith(('.jsx', '.tsx')):
             content = _add_missing_router_import(content)
 
+        # 8. Strip api import from App.jsx (full-stack safety net)
+        #     App.jsx is a router component — it should never import api.js.
+        #     Only page files need api.js. This catches cases where the
+        #     prompt fix didn't fully take.
+        if norm_path.endswith('/frontend/src/App.jsx') or norm_path.endswith('/frontend/src/App.tsx'):
+            content = re.sub(
+                r'''^import\s+api\s+from\s+['"](?:\.\.\/|\.\/)?services\/api['"]\s*;?\s*''',
+                '',
+                content,
+                flags=re.MULTILINE,
+            )
+
         if content != original:
             logger.info("post_process: fixed %s", filepath)
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
 
-    # 8. Safety net: inject missing page component imports into App.jsx
+    # 9. Safety net: inject missing page component imports into App.jsx
     #     (catches cases where the prompt fix didn't fully take)
     _add_missing_page_imports_for_app(output_dir, root)
