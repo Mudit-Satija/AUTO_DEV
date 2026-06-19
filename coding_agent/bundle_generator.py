@@ -237,7 +237,14 @@ def build_bundle_prompt(
                 lines.append("- Pages use api directly: api.get('/products'), api.post('/products', body), api.put('/products/:id', body), api.delete('/products/:id')")
                 lines.append("- Do NOT create named export wrappers like 'productApi' or 'orderApi' in api.js. Pages call api.get() directly with the endpoint path.")
             else:
-                lines.append("- App.jsx handles routing only — it does NOT import api.js. Only page files import api directly.")
+                lines.append("- App.jsx is a pure router — it contains ONLY:")
+                lines.append("  1. BrowserRouter, Routes, Route, Link imports from react-router-dom")
+                lines.append("  2. Page component imports (e.g. import Dashboard from './pages/Dashboard')")
+                lines.append("  3. The route definitions (<Route path='/' element={<Dashboard />} />)")
+                lines.append("  4. A nav bar with <Link> components")
+                lines.append("  It does NOT: import api, use useState, use useEffect, read/write")
+                lines.append("  localStorage, or fetch any data. All data fetching happens inside")
+                lines.append("  individual page components via api.js.")
 
     return "\n".join(lines)
 

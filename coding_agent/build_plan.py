@@ -832,6 +832,18 @@ def _apply_deterministic_static_content(files: List[Dict[str, Any]], project_nam
         path = f["path"]
         
         if path == "README.md":
+            is_fastapi = "fastapi" in backend_fw.lower()
+            if is_fastapi:
+                backend_instructions = """```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```"""
+            else:
+                backend_instructions = """```bash
+cd backend
+npm install
+node src/app.js
+```"""
             f["static_content"] = f"""# {project_name}
 
 Generated dynamically via AUTO_DEV pipeline.
@@ -851,11 +863,7 @@ npm run dev
 ```
 
 ### Backend Setup
-```bash
-cd backend
-npm install
-npm start
-```
+{backend_instructions}
 """
         elif path == "frontend/.env":
             f["static_content"] = "VITE_API_URL=/api\n"
@@ -914,6 +922,7 @@ npm start
         elif path in ("frontend/vite.config.js", "frontend/vite.config.ts"):
             plugin_import = 'import react from "@vitejs/plugin-react";' if "react" in frontend_fw else 'import vue from "@vitejs/plugin-vue";'
             plugin_call = 'react()' if "react" in frontend_fw else 'vue()'
+            proxy_port = 8000 if "fastapi" in backend_fw.lower() else 5000
             f["static_content"] = f"""import {{ defineConfig }} from "vite";
 {plugin_import}
 
@@ -923,7 +932,7 @@ export default defineConfig({{
     port: 3000,
     proxy: {{
       '/api': {{
-        target: 'http://localhost:5000',
+        target: 'http://localhost:{proxy_port}',
         changeOrigin: true
       }}
     }}

@@ -446,6 +446,7 @@ def post_process_generated_files(output_dir: str) -> None:
     - Mongoose import paths in backend models
     - '../services/*' imports in frontend-only projects (safety net)
     - api import from App.jsx (router component, never needs api.js)
+    - malformed './App.css' import in App.jsx (LLM drops './' prefix)
     """
     import glob as glob_mod
     import os
@@ -559,6 +560,13 @@ def post_process_generated_files(output_dir: str) -> None:
             content = re.sub(
                 r'''^import\s+api\s+from\s+['"](?:\.\.\/|\.\/)?services\/api['"]\s*;?\s*''',
                 '',
+                content,
+                flags=re.MULTILINE,
+            )
+            # Fix malformed CSS import in App.jsx (LLM sometimes drops './' prefix)
+            content = re.sub(
+                r'''^import\s+['"]App\.css['"]\s*;?\s*$''',
+                "import './App.css';",
                 content,
                 flags=re.MULTILINE,
             )
